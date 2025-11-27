@@ -335,7 +335,7 @@ def newton_method(
             dx = np.sign(Fx) * min(params.tol, params.max_shift)
         else:
             dx = Fx / Fp
-        print(f"dx: {dx} Fx: {Fx} Fp: {Fp}")
+        #print(f"dx: {dx} Fx: {Fx} Fp: {Fp}")
         # ダンプ（大ジャンプ抑制）
         if abs(dx) > params.B or abs(dx) > params.max_shift:
             dx = np.sign(dx) * params.max_shift
