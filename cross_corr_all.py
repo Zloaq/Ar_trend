@@ -94,6 +94,37 @@ KERNEL_CONFIG = [
     ((384, 512), Path(KERNEL_CONFIG_DIR) / "kernel_average_result_y447_x280-562_20251002-154827.npz"),
 ]
 
+KERNEL_CACHE: Dict[Tuple[int, int], Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict]] = {}
+
+
+def _ensure_kernel_cache_loaded() -> None:
+    """
+    KERNEL_CONFIG で指定された npz を一度だけ読み込み、メモリ上にキャッシュする。
+    各ワーカープロセスごとに最初に呼ばれたタイミングでロードされる。
+    """
+    global KERNEL_CACHE
+    if KERNEL_CACHE:
+        return
+
+    cache: Dict[Tuple[int, int], Tuple[np.ndarray, np.ndarray]] = {}
+    for (ymin, ymax), kernel_path in KERNEL_CONFIG:
+        kernel, fit_ranges, ar_features, mu_wavelength_pairs, meta = read_kernel_npz(kernel_path)
+        cache[(ymin, ymax)] = (kernel, mu_wavelength_pairs)
+    KERNEL_CACHE = cache
+
+
+def get_kernel_for_raw_idx(raw_idx: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict]:
+    """
+    raw_idx に対応する y 範囲のカーネルを KERNEL_CACHE から取得する。
+    対応する範囲がなければエラーとしてログを出して終了する。
+    """
+    _ensure_kernel_cache_loaded()
+    for (ymin, ymax), _ in KERNEL_CONFIG:
+        if ymin <= raw_idx < ymax:
+            return KERNEL_CACHE[(ymin, ymax)]
+    logging.error(f"raw_idx={raw_idx} is out of KERNEL_CONFIG range")
+    sys.exit(1)
+
 
 def validate_environment() -> None:
     """
@@ -333,24 +364,23 @@ def write_h5py(h5py_path, header, lambdas, pixpos):
 
 def crosscorr_roop(fits_path, h5py_path):
 
+    # ヘッダと画像データを一度だけメモリ上に展開する
     header = fits.getheader(fits_path)
+    with fits.open(fits_path, memmap=False) as hdul:
+        data = hdul[0].data
+
     y_indices = list(range(10, 501))
     pixpos = np.empty((8, len(y_indices)), dtype=np.float32)
+    lambdas = None  # ループ内で毎回更新されるが、最終的に最後の値を保存する点は従来実装と同じ
 
     for j, raw_idx in enumerate(y_indices):
         logging.info(f"processing raw_idx={raw_idx} in {fits_path}")
-        center_row = chose_row_cut_ar_fits(fits_path, raw_idx)
-        kernel_path = None
-        for (ymin, ymax), path in KERNEL_CONFIG:
-            if ymin <= raw_idx < ymax:
-                kernel_path = path
-                break
+        # data から直接必要な行を取り出す（FITS を毎回開き直さない）
+        center_row = data[raw_idx, :]
 
-        if kernel_path is None:
-            logging.error(f"raw_idx={raw_idx} is out of KERNEL_CONFIG range for {fits_path}")
-            sys.exit(1)
+        # raw_idx に対応するカーネルをメモリキャッシュから取得
+        kernel, mu_wavelength_pairs = get_kernel_for_raw_idx(raw_idx)
 
-        kernel, fit_ranges, ar_features, mu_wavelength_pairs, meta = read_kernel_npz(kernel_path)
         corr, best_lag, max_corr = get_cross_corr(center_row, kernel)
         snt_result, lambdas = get_sawtooth_center(center_row, mu_wavelength_pairs, best_lag)
         pixpos[:, j] = np.array([r.xc for r in snt_result], dtype=np.float32)
