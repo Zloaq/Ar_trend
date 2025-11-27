@@ -44,11 +44,34 @@ def setup_worker_logger() -> None:
 
 
 def worker_init() -> None:
-    """ProcessPoolExecutor 用の初期化関数。ワーカープロセスごとにロガーを設定する。"""
+    """ProcessPoolExecutor 用の初期化関数。ワーカープロセスごとにロガーをクリアする。"""
     root_logger = logging.getLogger()
-    # 親プロセスから継承したハンドラをクリアしてから専用ログを付ける
     root_logger.handlers.clear()
-    setup_worker_logger()
+
+
+def setup_object_logger(object_name: str) -> None:
+    """object ごとに専用のログファイルをセットアップする。"""
+    root_logger = logging.getLogger()
+
+    # 既存の FileHandler を外してクローズ（多重追加・多重書き込み防止）
+    for h in list(root_logger.handlers):
+        if isinstance(h, logging.FileHandler):
+            root_logger.removeHandler(h)
+            h.close()
+
+    log_dir = Path(WORK_DIR) / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    log_path = log_dir / f"cross_corr_{object_name}.log"
+
+    # mode="w" で毎回上書き
+    file_handler = logging.FileHandler(log_path, mode="w")
+    formatter = logging.Formatter("%(asctime)s [PID %(process)d] %(levelname)s: %(message)s")
+    file_handler.setFormatter(formatter)
+
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(file_handler)
+
 
 load_dotenv("config.env")
 
@@ -337,6 +360,7 @@ def crosscorr_roop(fits_path, h5py_path):
 
 
 def work_per_object(object_name, fits_dict):
+    setup_object_logger(object_name)
     for date_label, base_name_list in fits_dict.items():
         do_scp_raw_fits(date_label, object_name, base_name_list)
 
