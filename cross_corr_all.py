@@ -359,7 +359,14 @@ def get_work_dir_path(object_name: str, date_label: str) -> Path:
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    # ルートロガーを明示的に設定（他のモジュールの設定に潰されないようにする）
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    root_logger.addHandler(stream_handler)
+    root_logger.setLevel(logging.INFO)
+
     logging.info(f"Start {sys.argv[0]}")
 
     # 必須ファイル・環境のチェック
