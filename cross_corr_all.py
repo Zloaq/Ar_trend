@@ -142,6 +142,7 @@ def db_search(conn: sqlite3.Connection, object_name, date_label=None) -> Dict[st
             f"AND date_label = '{date_label}' "
         )
     cur = conn.cursor()
+    logging.debug(f"db_search SQL for object={object_name}, date_label={date_label}: {query}")
     cur.execute(query)
 
     filepath_dict: Dict[str, List[str]] = {}
@@ -365,11 +366,17 @@ def main():
 
     csv_path = REQUIRED_LOCAL_FILES["ar_name_csv"]
     conn = sqlite3.connect(DB_PATH)
+
+    logging.info(f"reading object list from {csv_path}")
     objects = get_object_list(csv_path)
 
     fits_dict_list = []
-    for object_name in objects:
+    total_objects = len(objects)
+    logging.info(f"number of objects from csv: {total_objects}")
+    for idx, object_name in enumerate(objects, 1):
+        logging.info(f"[{idx}/{total_objects}] start db_search for object={object_name}")
         fits_dict = db_search(conn, object_name)
+        logging.info(f"[{idx}/{total_objects}] finished db_search for object={object_name}, date_labels={len(fits_dict)}")
         fits_dict_list.append((object_name, fits_dict))
     conn.close()
 
