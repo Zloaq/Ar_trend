@@ -339,7 +339,7 @@ def main():
         fits_dict_list.append((object_name, fits_dict))
     conn.close()
 
-    with ProcessPoolExecutor(max_workers=4) as ex:
+    with ProcessPoolExecutor(max_workers=5) as ex:
         futures = [
             ex.submit(work_per_object, object_name, fits_dict)
             for object_name, fits_dict in fits_dict_list
