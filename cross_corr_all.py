@@ -415,9 +415,9 @@ def main():
     total_objects = len(objects)
     logging.info(f"number of objects from csv: {total_objects}")
     for idx, object_name in enumerate(objects, 1):
-        logging.info(f"[{idx}/{total_objects}] start db_search for object={object_name}")
+        logging.info(f"[{idx}/{total_objects}] db_search for object={object_name}")
         fits_dict = db_search(conn, object_name)
-        logging.info(f"[{idx}/{total_objects}] finished db_search for object={object_name}, date_labels={len(fits_dict)}")
+        #logging.info(f"[{idx}/{total_objects}] finished db_search for object={object_name}, date_labels={len(fits_dict)}")
         fits_dict_list.append((object_name, fits_dict))
     conn.close()
 
