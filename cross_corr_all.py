@@ -5,6 +5,7 @@ import sys
 import csv
 import glob
 import logging
+import tempfile
 import subprocess
 import sqlite3
 from pathlib import Path
@@ -170,11 +171,24 @@ def do_scp_raw_fits(date_label: str, object_name: str, base_name_list: List[str]
     num_min = int(num1_list[0])
     num_max = int(num1_list[-1])
 
-    src = f"{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}*-{{{num_min:04d}..{num_max:04d}}}.fits"
-    dst = f"{RAWDATA_DIR}/{object_name}/{date_label}"
-    os.makedirs(dst, exist_ok=True)
-    cmd = ["scp", src, dst]
-    subprocess.run(cmd, check=True, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    dst_dir = Path(RAWDATA_DIR) / object_name / date_label
+    dst_dir.mkdir(parents=True, exist_ok=True)
+
+    # シェルスクリプトを即席で作って、bash で実行する
+    script_content = f"""
+    #!/bin/bash
+
+    src="{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}\*-{{{num_min:04d}..{num_max:04d}}}.fits"
+    dst="{dst_dir}"
+    mkdir -p "$dst"
+    echo "scp $src $dst"
+    scp $src "$dst"
+    """
+
+    with tempfile.NamedTemporaryFile("w", delete=False, suffix=".sh") as tmp:
+        script_path = tmp.name
+        tmp.write(script_content)
+    result = subprocess.run(["bash", script_path], capture_output=True, text=True)
 
 
 def do_remove_raw_fits(date_label: str, object_name: str):
