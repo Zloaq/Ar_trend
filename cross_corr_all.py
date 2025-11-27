@@ -16,7 +16,7 @@ from astropy.io import fits
 import h5py
 
 import sawtooth_newton as snt
-#from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import re
 
 def setup_worker_logger() -> None:
@@ -378,7 +378,7 @@ def main():
         fits_dict_list.append((object_name, fits_dict))
     conn.close()
 
-    """
+    #"""
     with ProcessPoolExecutor(max_workers=1, initializer=worker_init) as ex:
         futures = [
             ex.submit(work_per_object, object_name, fits_dict)
@@ -387,10 +387,10 @@ def main():
         for fut in as_completed(futures):
             # ここで例外があれば raise される
             fut.result()
-    """
+    #"""
 
-    for object_name, fits_dict in fits_dict_list:
-        work_per_object(object_name, fits_dict)
+    #for object_name, fits_dict in fits_dict_list:
+    #    work_per_object(object_name, fits_dict)
 
     
 
