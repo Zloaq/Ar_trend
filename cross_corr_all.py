@@ -170,20 +170,11 @@ def do_scp_raw_fits(date_label: str, object_name: str, base_name_list: List[str]
     num_min = int(num1_list[0])
     num_max = int(num1_list[-1])
 
-    src = f"{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}*-{{{num_min:04d}..{num_max:04d}}}.fits"
+    src = f"{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}\*-{{{num_min:04d}..{num_max:04d}}}.fits"
     dst = f"{RAWDATA_DIR}/{object_name}/{date_label}"
     os.makedirs(dst, exist_ok=True)
     cmd = ["scp", src, dst]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        logging.error(
-            "scp failed: cmd=%s, rc=%s, stderr=%s",
-            " ".join(cmd),
-            result.returncode,
-            result.stderr,
-        )
-        raise subprocess.CalledProcessError(result.returncode, cmd)
-    #subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def do_remove_raw_fits(date_label: str, object_name: str):
