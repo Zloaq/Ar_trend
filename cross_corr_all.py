@@ -174,8 +174,9 @@ def do_scp_raw_fits(date_label: str, object_name: str, base_name_list: List[str]
     dst_dir = Path(RAWDATA_DIR) / object_name / date_label
     dst_dir.mkdir(parents=True, exist_ok=True)
 
-    # シェルスクリプトを即席で作って、bash で実行する
-    script_content = f"""
+    # シェルスクリプトを即席で作って、bash で実行する   
+    script_content = f"""#!/bin/bash
+    set -euo pipefail
     #!/bin/bash
 
     src="{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}\*-{{{num_min:04d}..{num_max:04d}}}.fits"
@@ -189,6 +190,12 @@ def do_scp_raw_fits(date_label: str, object_name: str, base_name_list: List[str]
         script_path = tmp.name
         tmp.write(script_content)
     result = subprocess.run(["bash", script_path], capture_output=True, text=True)
+
+    if result.returncode != 0:
+        logging.error(f"scp_raw_fits: scp command failed: {result.stderr}")
+        sys.exit(1)
+
+    logging.info(f"scp_raw_fits: scp command succeeded: {result.stdout}")
 
 
 def do_remove_raw_fits(date_label: str, object_name: str):
