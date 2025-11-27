@@ -145,7 +145,9 @@ def db_search(conn: sqlite3.Connection, object_name, date_label=None) -> Dict[st
     cur.execute(query)
 
     filepath_dict: Dict[str, List[str]] = {}
-    for date_label, base_name in cur.fetchall():
+    rows = cur.fetchall()
+    logging.info(f"db_search: object={object_name}, date_label={date_label}, hits={len(rows)}")
+    for date_label, base_name in rows:
         filepath_dict.setdefault(date_label, []).append(base_name)
     return filepath_dict
 
