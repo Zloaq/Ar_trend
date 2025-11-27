@@ -378,16 +378,20 @@ def main():
         fits_dict_list.append((object_name, fits_dict))
     conn.close()
 
-    #"""
+
     with ProcessPoolExecutor(max_workers=5, initializer=worker_init) as ex:
-        futures = [
-            ex.submit(work_per_object, object_name, fits_dict)
+        future_to_object = {
+            ex.submit(work_per_object, object_name, fits_dict): object_name
             for object_name, fits_dict in fits_dict_list
-        ]
-        for fut in as_completed(futures):
-            # ここで例外があれば raise される
+        }
+        total = len(future_to_object)
+        done = 0
+        for fut in as_completed(future_to_object):
+            object_name = future_to_object[fut]
+            done += 1
+            print(f"[{done}/{total}] finished {object_name}")
             fut.result()
-    #"""
+
 
     #for object_name, fits_dict in fits_dict_list:
     #    work_per_object(object_name, fits_dict)
