@@ -432,7 +432,7 @@ def main():
         for fut in as_completed(future_to_object):
             object_name = future_to_object[fut]
             done += 1
-            print(f"[{done}/{total}] finished {object_name}")
+            print(f"[{done}/{total}] finished {object_name}", flush=True)
             fut.result()
 
 
@@ -443,7 +443,7 @@ def main():
 
 
 if __name__ == "__main__":
-    print(f"Start {sys.argv[0]}")
+    print(f"Start {sys.argv[0]}", flush=True)
     logging.basicConfig(
         level=logging.INFO,
         format="%(levelname)s: %(message)s",
