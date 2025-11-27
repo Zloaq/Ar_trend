@@ -16,7 +16,7 @@ from astropy.io import fits
 import h5py
 
 import sawtooth_newton as snt
-from concurrent.futures import ProcessPoolExecutor, as_completed
+#from concurrent.futures import ProcessPoolExecutor, as_completed
 import re
 
 def setup_worker_logger() -> None:
