@@ -19,6 +19,36 @@ import sawtooth_newton as snt
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import re
 
+def setup_worker_logger() -> None:
+    """各ワーカープロセスごとに専用のログファイルをセットアップする。"""
+    root_logger = logging.getLogger()
+    # すでにファイルハンドラが付いている場合は何もしない（多重追加防止）
+    has_file_handler = any(isinstance(h, logging.FileHandler) for h in root_logger.handlers)
+    if has_file_handler:
+        return
+
+    # ログ出力ディレクトリとファイルパス
+    log_dir = Path(WORK_DIR) / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    pid = os.getpid()
+    log_path = log_dir / f"cross_corr_worker_{pid}.log"
+
+    file_handler = logging.FileHandler(log_path)
+    formatter = logging.Formatter("%(asctime)s [PID %(process)d] %(levelname)s: %(message)s")
+    file_handler.setFormatter(formatter)
+
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(file_handler)
+
+
+def worker_init() -> None:
+    """ProcessPoolExecutor 用の初期化関数。ワーカープロセスごとにロガーを設定する。"""
+    root_logger = logging.getLogger()
+    # 親プロセスから継承したハンドラをクリアしてから専用ログを付ける
+    root_logger.handlers.clear()
+    setup_worker_logger()
+
 load_dotenv("config.env")
 
 DB_PATH = os.getenv("DB_PATH")
@@ -223,7 +253,7 @@ def get_sawtooth_center(center_row, mu_wavelength_pairs, best_lag):
         mu_pix, wl = mu_wavelength_pair
         mu_pix_crossed_for_python = mu_pix - 1 + best_lag
         snt_result = snt.newton_method(center_row, mu_pix_crossed_for_python)
-        print(f"result: {snt_result}")
+        logging.debug(f"sawtooth center result at mu_pix={mu_pix}, wl={wl}: {snt_result}")
         snt_results.append(snt_result)
         lambdas.append(wl)
 
@@ -264,7 +294,7 @@ def crosscorr_roop(fits_path, h5py_path):
     pixpos = np.empty((8, len(y_indices)), dtype=np.float32)
 
     for j, raw_idx in enumerate(y_indices):
-        print(f"raw_idx: {raw_idx}")
+        logging.info(f"processing raw_idx={raw_idx} in {fits_path}")
         center_row = chose_row_cut_ar_fits(fits_path, raw_idx)
         kernel_path = None
         for (ymin, ymax), path in KERNEL_CONFIG:
@@ -273,7 +303,7 @@ def crosscorr_roop(fits_path, h5py_path):
                 break
 
         if kernel_path is None:
-            print(f"raw_idx: {raw_idx} is out of range.")
+            logging.error(f"raw_idx={raw_idx} is out of KERNEL_CONFIG range for {fits_path}")
             sys.exit(1)
 
         kernel, fit_ranges, ar_features, mu_wavelength_pairs, meta = read_kernel_npz(kernel_path)
@@ -341,7 +371,7 @@ def main():
         fits_dict_list.append((object_name, fits_dict))
     conn.close()
 
-    with ProcessPoolExecutor(max_workers=5) as ex:
+    with ProcessPoolExecutor(max_workers=5, initializer=worker_init) as ex:
         futures = [
             ex.submit(work_per_object, object_name, fits_dict)
             for object_name, fits_dict in fits_dict_list
