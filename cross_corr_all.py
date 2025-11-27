@@ -174,8 +174,16 @@ def do_scp_raw_fits(date_label: str, object_name: str, base_name_list: List[str]
     dst = f"{RAWDATA_DIR}/{object_name}/{date_label}"
     os.makedirs(dst, exist_ok=True)
     cmd = ["scp", src, dst]
-
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        logging.error(
+            "scp failed: cmd=%s, rc=%s, stderr=%s",
+            " ".join(cmd),
+            result.returncode,
+            result.stderr,
+        )
+        raise subprocess.CalledProcessError(result.returncode, cmd)
+    #subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def do_remove_raw_fits(date_label: str, object_name: str):
