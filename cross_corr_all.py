@@ -64,10 +64,10 @@ REQUIRED_LOCAL_FILES = {
 }
 
 KERNEL_CONFIG = [
-    ((0, 128), KERNEL_CONFIG_DIR / "kernel_average_result_y63_x140-410_20251002-020351.npz"),
-    ((128, 256), KERNEL_CONFIG_DIR / "kernel_average_result_y191_x180-458_20251002-021431.npz"),
-    ((256, 384), KERNEL_CONFIG_DIR / "kernel_average_result_y319_x231-512_20251002-154330.npz"),
-    ((384, 512), KERNEL_CONFIG_DIR / "kernel_average_result_y447_x280-562_20251002-154827.npz"),
+    ((0, 128), Path(KERNEL_CONFIG_DIR) / "kernel_average_result_y63_x140-410_20251002-020351.npz"),
+    ((128, 256), Path(KERNEL_CONFIG_DIR) / "kernel_average_result_y191_x180-458_20251002-021431.npz"),
+    ((256, 384), Path(KERNEL_CONFIG_DIR) / "kernel_average_result_y319_x231-512_20251002-154330.npz"),
+    ((384, 512), Path(KERNEL_CONFIG_DIR) / "kernel_average_result_y447_x280-562_20251002-154827.npz"),
 ]
 
 
