@@ -359,8 +359,6 @@ def get_work_dir_path(object_name: str, date_label: str) -> Path:
 
 
 def main():
-
-    logging.info(f"Start {sys.argv[0]}")
     # 必須ファイル・環境のチェック
     validate_environment()
 
@@ -393,6 +391,7 @@ def main():
 
 
 if __name__ == "__main__":
+    print(f"Start {sys.argv[0]}")
     logging.basicConfig(
         level=logging.INFO,
         format="%(levelname)s: %(message)s",
