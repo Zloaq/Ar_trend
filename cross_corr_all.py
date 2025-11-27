@@ -179,7 +179,7 @@ def do_scp_raw_fits(date_label: str, object_name: str, base_name_list: List[str]
     set -euo pipefail
     #!/bin/bash
 
-    src="{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}\*-{{{num_min:04d}..{num_max:04d}}}.fits"
+    src="{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{{{num_min:04d}..{num_max:04d}}}.fits"
     dst="{dst_dir}"
     mkdir -p "$dst"
     echo "scp $src $dst"
