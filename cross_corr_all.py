@@ -344,6 +344,7 @@ def work_per_object(object_name, fits_dict):
             fits_path = Path(RAWDATA_DIR) / object_name / date_label / base_name
             h5py_filename = base_name.replace(".fits", ".h5")
             h5py_path = Path(WORK_DIR) / object_name / date_label / h5py_filename
+            h5py_path.parent.mkdir(parents=True, exist_ok=True)
             crosscorr_roop(fits_path, h5py_path)
         
         do_remove_raw_fits(date_label, object_name)
