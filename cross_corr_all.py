@@ -100,13 +100,13 @@ def db_search(conn: sqlite3.Connection, object_name, date_label=None) -> Dict[st
         query = (
             "SELECT date_label, base_name "
             "FROM frames "
-            f"WHERE object '{object_name}' "
+            f"WHERE object = '{object_name}' "
         )
     else:
         query = (
             "SELECT date_label, base_name "
             "FROM frames "
-            f"WHERE object '{object_name}' "
+            f"WHERE object = '{object_name}' "
             f"AND date_label = '{date_label}' "
         )
     cur = conn.cursor()
