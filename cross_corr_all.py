@@ -176,15 +176,14 @@ def do_scp_raw_fits(date_label: str, object_name: str, base_name_list: List[str]
 
     # シェルスクリプトを即席で作って、bash で実行する   
     script_content = f"""#!/bin/bash
-    set -euo pipefail
-    #!/bin/bash
+set -euo pipefail
 
-    src="{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{{{num_min:04d}..{num_max:04d}}}.fits"
-    dst="{dst_dir}"
-    mkdir -p "$dst"
-    echo "scp $src $dst"
-    scp $src "$dst"
-    """
+src="{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{{{num_min:04d}..{num_max:04d}}}.fits"
+dst="{dst_dir}"
+mkdir -p "$dst"
+echo "scp $src $dst"
+scp $src "$dst"
+"""
 
     with tempfile.NamedTemporaryFile("w", delete=False, suffix=".sh") as tmp:
         script_path = tmp.name
