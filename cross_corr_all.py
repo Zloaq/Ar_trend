@@ -26,6 +26,7 @@ RAID_PC = os.getenv("RAID_PC")
 RAID_DIR = os.getenv("RAID_DIR")
 RAWDATA_DIR= os.getenv("RAWDATA_DIR")
 WORK_DIR = os.getenv("WORK_DIR")
+KERNEL_CONFIG_DIR = os.getenv("KERNEL_CONFIG_DIR")
 
 # Required local files and kernel configurations
 REQUIRED_LOCAL_FILES = {
@@ -33,10 +34,10 @@ REQUIRED_LOCAL_FILES = {
 }
 
 KERNEL_CONFIG = [
-    ((0, 128), Path(__file__).parent / "kernel_average_result_y63_x140-410_20251002-020351.npz"),
-    ((128, 256), Path(__file__).parent / "kernel_average_result_y191_x180-458_20251002-021431.npz"),
-    ((256, 384), Path(__file__).parent / "kernel_average_result_y319_x231-512_20251002-154330.npz"),
-    ((384, 512), Path(__file__).parent / "kernel_average_result_y447_x280-562_20251002-154827.npz"),
+    ((0, 128), KERNEL_CONFIG_DIR / "kernel_average_result_y63_x140-410_20251002-020351.npz"),
+    ((128, 256), KERNEL_CONFIG_DIR / "kernel_average_result_y191_x180-458_20251002-021431.npz"),
+    ((256, 384), KERNEL_CONFIG_DIR / "kernel_average_result_y319_x231-512_20251002-154330.npz"),
+    ((384, 512), KERNEL_CONFIG_DIR / "kernel_average_result_y447_x280-562_20251002-154827.npz"),
 ]
 
 
@@ -54,6 +55,7 @@ def validate_environment() -> None:
         ("RAID_DIR", RAID_DIR),
         ("RAWDATA_DIR", RAWDATA_DIR),
         ("WORK_DIR", WORK_DIR),
+        ("KERNEL_CONFIG_DIR", KERNEL_CONFIG_DIR),
     ]
 
     for name, value in env_vars:
