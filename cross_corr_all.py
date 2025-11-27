@@ -379,7 +379,7 @@ def main():
     conn.close()
 
     #"""
-    with ProcessPoolExecutor(max_workers=1, initializer=worker_init) as ex:
+    with ProcessPoolExecutor(max_workers=5, initializer=worker_init) as ex:
         futures = [
             ex.submit(work_per_object, object_name, fits_dict)
             for object_name, fits_dict in fits_dict_list
