@@ -142,12 +142,12 @@ def db_search(conn: sqlite3.Connection, object_name, date_label=None) -> Dict[st
             f"AND date_label = '{date_label}' "
         )
     cur = conn.cursor()
-    logging.info(f"db_search start: object={object_name}, date_label={date_label}")
+    logging.debug(f"db_search SQL for object={object_name}, date_label={date_label}: {query}")
     cur.execute(query)
 
     filepath_dict: Dict[str, List[str]] = {}
     rows = cur.fetchall()
-    logging.info(f"db_search done: object={object_name}, date_label={date_label}, hits={len(rows)}")
+    logging.info(f"db_search: object={object_name}, date_label={date_label}, hits={len(rows)}")
     for date_label, base_name in rows:
         filepath_dict.setdefault(date_label, []).append(base_name)
     return filepath_dict
@@ -359,27 +359,21 @@ def get_work_dir_path(object_name: str, date_label: str) -> Path:
 
 
 def main():
-    # ルートロガーを明示的に設定（他のモジュールの設定に潰されないようにする）
-    root_logger = logging.getLogger()
-    root_logger.handlers.clear()
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
-    root_logger.addHandler(stream_handler)
-    root_logger.setLevel(logging.INFO)
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
     logging.info(f"Start {sys.argv[0]}")
-
     # 必須ファイル・環境のチェック
     validate_environment()
 
     csv_path = REQUIRED_LOCAL_FILES["ar_name_csv"]
-    logging.info(f"reading object list from {csv_path}")
     conn = sqlite3.connect(DB_PATH)
+
+    logging.info(f"reading object list from {csv_path}")
     objects = get_object_list(csv_path)
-    total_objects = len(objects)
-    logging.info(f"number of objects from csv: {total_objects}")
 
     fits_dict_list = []
+    total_objects = len(objects)
+    logging.info(f"number of objects from csv: {total_objects}")
     for idx, object_name in enumerate(objects, 1):
         logging.info(f"[{idx}/{total_objects}] start db_search for object={object_name}")
         fits_dict = db_search(conn, object_name)
