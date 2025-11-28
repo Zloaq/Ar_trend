@@ -188,6 +188,7 @@ def db_search(conn: sqlite3.Connection, object_name, date_label=None) -> Dict[st
             "SELECT date_label, base_name "
             "FROM frames "
             f"WHERE object = '{object_name}' "
+            f"AND filepath COLLATE NOCASE LIKE '%/spec%'"
         )
     else:
         query = (
@@ -195,6 +196,7 @@ def db_search(conn: sqlite3.Connection, object_name, date_label=None) -> Dict[st
             "FROM frames "
             f"WHERE object = '{object_name}' "
             f"AND date_label = '{date_label}' "
+            f"AND filepath COLLATE NOCASE LIKE '%/spec%'"
         )
     cur = conn.cursor()
     logging.debug(f"db_search SQL for object={object_name}, date_label={date_label}: {query}")
