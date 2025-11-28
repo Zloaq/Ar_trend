@@ -245,11 +245,7 @@ scp {RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{{{num_min:04d}..{nu
         tmp.write(script_content)
     result = subprocess.run(["bash", script_path], capture_output=True, text=True)
 
-    if result.returncode != 0:
-        logging.error(f"scp_raw_fits: scp command failed: {result.stderr}")
-        sys.exit(1)
-
-    logging.info(f"scp_raw_fits: scp command succeeded: {result.stdout}")
+    logging.info(f"scp_raw_fits: scp command end")
 
 
 def do_remove_raw_fits(date_label: str, object_name: str):
