@@ -35,7 +35,7 @@ def setup_worker_logger() -> None:
     pid = os.getpid()
     log_path = log_dir / f"cross_corr_worker_{pid}.log"
 
-    file_handler = logging.FileHandler(log_path)
+    file_handler = logging.FileHandler(log_path, mode="a")
     formatter = logging.Formatter("%(asctime)s [PID %(process)d] %(levelname)s: %(message)s")
     file_handler.setFormatter(formatter)
 
@@ -64,8 +64,8 @@ def setup_object_logger(object_name: str) -> None:
 
     log_path = log_dir / f"cross_corr_{object_name}.log"
 
-    # mode="w" で毎回上書き
-    file_handler = logging.FileHandler(log_path, mode="w")
+    # mode="a" で毎回追記
+    file_handler = logging.FileHandler(log_path, mode="a")
     formatter = logging.Formatter("%(asctime)s [PID %(process)d] %(levelname)s: %(message)s")
     file_handler.setFormatter(formatter)
 
@@ -374,7 +374,7 @@ def crosscorr_roop(fits_path, h5py_path):
     lambdas = None  # ループ内で毎回更新されるが、最終的に最後の値を保存する点は従来実装と同じ
 
     for j, raw_idx in enumerate(y_indices):
-        logging.info(f"processing raw_idx={raw_idx} in {fits_path}")
+        #logging.info(f"processing raw_idx={raw_idx} in {fits_path}")
         # data から直接必要な行を取り出す（FITS を毎回開き直さない）
         center_row = data[raw_idx, :]
 
@@ -399,6 +399,12 @@ def work_per_object(object_name, fits_dict):
             h5py_filename = base_name.replace(".fits", ".h5")
             h5py_path = Path(WORK_DIR) / object_name / date_label / h5py_filename
             h5py_path.parent.mkdir(parents=True, exist_ok=True)
+            if not fits_path.exists():
+                logging.warning(f"{fits_path} does not exist. skipping.")
+                continue
+            if h5py_path.exists():
+                logging.warning(f"{h5py_path} already exists. skipping.")
+                continue
             crosscorr_roop(fits_path, h5py_path)
         
         do_remove_raw_fits(date_label, object_name)
@@ -449,7 +455,7 @@ def main():
     total_objects = len(objects)
     logging.info(f"number of objects from csv: {total_objects}")
     for idx, object_name in enumerate(objects, 1):
-        logging.info(f"[{idx}/{total_objects}] db_search for object={object_name}")
+        #logging.info(f"[{idx}/{total_objects}] db_search for object={object_name}")
         fits_dict = db_search(conn, object_name)
         #logging.info(f"[{idx}/{total_objects}] finished db_search for object={object_name}, date_labels={len(fits_dict)}")
         fits_dict_list.append((object_name, fits_dict))
@@ -466,7 +472,8 @@ def main():
         for fut in as_completed(future_to_object):
             object_name = future_to_object[fut]
             done += 1
-            print(f"[{done}/{total}] finished {object_name}", flush=True)
+            sys.stdout.write(f"[{done}/{total}] finished {object_name}\n")
+            sys.stdout.flush()
             fut.result()
 
 
