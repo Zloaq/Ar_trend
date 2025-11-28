@@ -403,6 +403,7 @@ def work_per_object(object_name, fits_dict):
             if h5py_path.exists():
                 logging.warning(f"{h5py_path} already exists. skipping.")
                 continue
+            logging.info(f"processing {fits_path}")
             crosscorr_roop(fits_path, h5py_path)
         
         do_remove_raw_fits(date_label, object_name)
