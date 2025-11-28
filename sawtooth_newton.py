@@ -134,15 +134,22 @@ def create_sawtooth(width: float) -> Kernel:
         連続カーネルのラッパー（a, f）。
     """
     a = width / 2.0
-    def f(u: float) -> float:
-        if u <= -a or u >= a:
-            return 0.0
-        elif -a <= u < -a/2:
-            return -(2.0 / a) * (u + a)
-        elif -a/2 <= u < a/2:
-            return (2.0 / a) * u
-        else:  # a/2 <= u < a
-            return -(2.0 / a) * (u - a)
+
+    def f(u):
+        u_arr = np.asarray(u, dtype=float)
+        out = np.zeros_like(u_arr, dtype=float)
+
+        m1 = (-a <= u_arr) & (u_arr < -a / 2.0)
+        m2 = (-a / 2.0 <= u_arr) & (u_arr < a / 2.0)
+        m3 = (a / 2.0 <= u_arr) & (u_arr < a)
+
+        out[m1] = -(2.0 / a) * (u_arr[m1] + a)
+        out[m2] = (2.0 / a) * u_arr[m2]
+        out[m3] = -(2.0 / a) * (u_arr[m3] - a)
+
+        if np.isscalar(u):
+            return float(out)
+        return out
 
     return Kernel(a=a, f=f)
 
@@ -175,7 +182,7 @@ def make_objective(
     h = params.tol / 10.0  # 例: tol=1e-3 → h=1e-4
     nseg = int(np.ceil((2 * a) / h))
     u = np.linspace(-a, a, nseg + 1)
-    f_vals = np.array([kernel.f(uu) for uu in u])
+    f_vals = kernel.f(u)
     
 
     # 内部数値積分（自動で十分細かい分割数を選ぶ）
@@ -213,15 +220,21 @@ def create_sawtooth_gradient(width: float) -> Kernel:
     """
     a = width / 2.0
 
-    def f(u: float) -> float:
-        if u <= -a or u >= a:
-            return 0.0
-        elif -a <= u < -a / 2.0:
-            return -(2.0 / a)
-        elif -a / 2.0 <= u < a / 2.0:
-            return 2.0 / a
-        else:  # a/2 <= u < a
-            return -(2.0 / a)
+    def f(u):
+        u_arr = np.asarray(u, dtype=float)
+        out = np.zeros_like(u_arr, dtype=float)
+
+        m1 = (-a <= u_arr) & (u_arr < -a / 2.0)
+        m2 = (-a / 2.0 <= u_arr) & (u_arr < a / 2.0)
+        m3 = (a / 2.0 <= u_arr) & (u_arr < a)
+
+        out[m1] = -(2.0 / a)
+        out[m2] = 2.0 / a
+        out[m3] = -(2.0 / a)
+
+        if np.isscalar(u):
+            return float(out)
+        return out
 
     return Kernel(a=a, f=f)
 
@@ -254,7 +267,7 @@ def make_objective_gradient(
     h = params.tol / 10.0 
     nseg = int(np.ceil((2 * a) / h))
     u = np.linspace(-a, a, nseg + 1)
-    f_vals = np.array([kernel.f(uu) for uu in u])
+    f_vals = kernel.f(u)
 
     # 内部数値積分（自動で十分細かい分割数を選ぶ）
     def F_grad(x: float) -> float:
