@@ -418,6 +418,10 @@ def get_object_list(path: Path):
             first[0] = "index"
 
         for row in reader:
+            if not row:
+                continue
+            if row[0].startswith("#"):
+                continue
             # 2列目に object がある前提で取得
             if len(row) >= 2:
                 objects.append(row[1])

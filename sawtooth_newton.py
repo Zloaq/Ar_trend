@@ -164,16 +164,18 @@ def make_objective(
 
 
     # 連続カーネル f(u)
-    f = kernel.f
+    h = params.tol / 10.0  # 例: tol=1e-3 → h=1e-4
+    nseg = int(np.ceil((2 * a) / h))
+    u = np.linspace(-a, a, nseg + 1)
+    f_vals = np.array([kernel.f(uu) for uu in u])
+    
 
     # 内部数値積分（自動で十分細かい分割数を選ぶ）
     def F(x: float) -> float:
         # u ∈ [-a, a] を自動分割（幅に比例して増やす）。
         # 外部 API には刻みを見せない。
-        h = params.tol / 10.0  # 例: tol=1e-3 → h=1e-4
-        nseg = int(np.ceil((2 * params.A) / h))
-        u = np.linspace(-params.A, params.A, nseg + 1)
-        integrand = np.array([(I(x + uu) - I0) * f(uu) for uu in u])
+        I_vals = np.array([I(x + uu) for uu in u])
+        integrand = (I_vals - I0) * f_vals
         #integrand = np.array([I(x + uu) * f(uu) for uu in u])
         return float(np.trapz(integrand, u))
 
@@ -240,15 +242,18 @@ def make_objective_gradient(
     vals = np.array([I(xx) for xx in grid])
     I0 = float(vals.min())
 
-    f = kernel.f
+    a = kernel.a
+    h = params.tol / 10.0 
+    nseg = int(np.ceil((2 * a) / h))
+    u = np.linspace(-a, a, nseg + 1)
+    f_vals = np.array([kernel.f(uu) for uu in u])
 
     # 内部数値積分（自動で十分細かい分割数を選ぶ）
     def F_grad(x: float) -> float:
         # u ∈ [-a, a] を自動分割（幅に比例して増やす）。
-        h = params.tol / 10.0  # 例: tol=1e-3 → h=1e-4
-        nseg = int(np.ceil((2 * params.A) / h))
-        u = np.linspace(-params.A, params.A, nseg + 1)
-        integrand = np.array([(I(x + uu) - I0) * f(uu) for uu in u])
+         # 例: tol=1e-3 → h=1e-4
+        I_vals = np.array([I(x + uu) for uu in u])
+        integrand = (I_vals - I0) * f_vals
         #integrand = np.array([I(x + uu) * f(uu) for uu in u])
         return float(np.trapz(integrand, u))
 
