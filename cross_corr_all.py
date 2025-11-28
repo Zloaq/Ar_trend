@@ -202,7 +202,7 @@ def db_search(conn: sqlite3.Connection, object_name, date_label=None) -> Dict[st
 
     filepath_dict: Dict[str, List[str]] = {}
     rows = cur.fetchall()
-    logging.info(f"db_search: object={object_name}, date_label={date_label}, hits={len(rows)}")
+    #logging.info(f"db_search: object={object_name}, date_label={date_label}, hits={len(rows)}")
     for date_label, base_name in rows:
         filepath_dict.setdefault(date_label, []).append(base_name)
     return filepath_dict
@@ -454,6 +454,7 @@ def main():
     fits_dict_list = []
     total_objects = len(objects)
     logging.info(f"number of objects from csv: {total_objects}")
+    logging.info(f"starting db_search for {total_objects} objects")
     for idx, object_name in enumerate(objects, 1):
         #logging.info(f"[{idx}/{total_objects}] db_search for object={object_name}")
         fits_dict = db_search(conn, object_name)
