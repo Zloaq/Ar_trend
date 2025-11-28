@@ -98,14 +98,22 @@ def interp_data(y: np.ndarray) -> Callable[[float], float]:
     y = np.asarray(y, dtype=float)
     n = y.size
 
-    def I(x: float) -> float:
-        if x <= 0:
-            return float(y[0])
-        if x >= n - 1:
-            return float(y[-1])
-        i = int(np.floor(x))
-        t = x - i
-        return float((1.0 - t) * y[i] + t * y[i + 1])
+    def I(x):
+        x_arr = np.asarray(x, dtype=float)
+
+        # 端をクランプ
+        x_clipped = np.clip(x_arr, 0.0, float(n - 1))
+
+        i0 = np.floor(x_clipped).astype(int)
+        i1 = np.clip(i0 + 1, 0, n - 1)
+        t = x_clipped - i0
+
+        vals = (1.0 - t) * y[i0] + t * y[i1]
+
+        # スカラー入力にはスカラーを返し、それ以外は配列を返す
+        if np.isscalar(x):
+            return float(vals)
+        return vals
 
     return I
 
@@ -159,7 +167,7 @@ def make_objective(
     L_A = x0 - params.A
     R_A = x0 + params.A
     grid = np.linspace(L_A, R_A, int(2 * params.A) + 1)
-    vals = np.array([I(xx) for xx in grid])
+    vals = np.asarray(I(grid), dtype=float)
     I0 = float(vals.min())
 
 
@@ -174,7 +182,7 @@ def make_objective(
     def F(x: float) -> float:
         # u ∈ [-a, a] を自動分割（幅に比例して増やす）。
         # 外部 API には刻みを見せない。
-        I_vals = np.array([I(x + uu) for uu in u])
+        I_vals = I(x + u)
         integrand = (I_vals - I0) * f_vals
         #integrand = np.array([I(x + uu) * f(uu) for uu in u])
         return float(np.trapz(integrand, u))
@@ -239,7 +247,7 @@ def make_objective_gradient(
     L_A = x0 - params.A
     R_A = x0 + params.A
     grid = np.linspace(L_A, R_A, int(2 * params.A) + 1)
-    vals = np.array([I(xx) for xx in grid])
+    vals = np.asarray(I(grid), dtype=float)
     I0 = float(vals.min())
 
     a = kernel.a
@@ -252,7 +260,7 @@ def make_objective_gradient(
     def F_grad(x: float) -> float:
         # u ∈ [-a, a] を自動分割（幅に比例して増やす）。
          # 例: tol=1e-3 → h=1e-4
-        I_vals = np.array([I(x + uu) for uu in u])
+        I_vals = I(x + u)
         integrand = (I_vals - I0) * f_vals
         #integrand = np.array([I(x + uu) * f(uu) for uu in u])
         return float(np.trapz(integrand, u))
