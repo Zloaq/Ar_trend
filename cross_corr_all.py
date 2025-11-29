@@ -20,28 +20,6 @@ import sawtooth_newton as snt
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import re
 
-def setup_worker_logger() -> None:
-    """各ワーカープロセスごとに専用のログファイルをセットアップする。"""
-    root_logger = logging.getLogger()
-    # すでにファイルハンドラが付いている場合は何もしない（多重追加防止）
-    has_file_handler = any(isinstance(h, logging.FileHandler) for h in root_logger.handlers)
-    if has_file_handler:
-        return
-
-    # ログ出力ディレクトリとファイルパス
-    log_dir = Path(WORK_DIR) / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    pid = os.getpid()
-    log_path = log_dir / f"cross_corr_worker_{pid}.log"
-
-    file_handler = logging.FileHandler(log_path, mode="a")
-    formatter = logging.Formatter("%(asctime)s [PID %(process)d] %(levelname)s: %(message)s")
-    file_handler.setFormatter(formatter)
-
-    root_logger.setLevel(logging.INFO)
-    root_logger.addHandler(file_handler)
-
 
 def worker_init() -> None:
     """ProcessPoolExecutor 用の初期化関数。ワーカープロセスごとにロガーをクリアする。"""
@@ -49,7 +27,7 @@ def worker_init() -> None:
     root_logger.handlers.clear()
 
 
-def setup_object_logger(object_name: str) -> None:
+def setup_object_logger(object_name: str, date_label: str) -> None:
     """object ごとに専用のログファイルをセットアップする。"""
     root_logger = logging.getLogger()
 
@@ -59,7 +37,7 @@ def setup_object_logger(object_name: str) -> None:
             root_logger.removeHandler(h)
             h.close()
 
-    log_dir = Path(WORK_DIR) / "logs"
+    log_dir = Path(WORK_DIR) / "logs" / date_label
     log_dir.mkdir(parents=True, exist_ok=True)
 
     log_path = log_dir / f"cross_corr_{object_name}.log"
@@ -334,7 +312,7 @@ def get_sawtooth_center(center_row, mu_wavelength_pairs, best_lag):
     return snt_results, lambdas
 
 
-def write_h5py(h5py_path, header, lambdas, pixpos):
+def write_h5py(h5py_path, header, lambdas, pixpos, converged):
     object_name = header.get("OBJECT", "")
     mjd = header.get("MJD", "")
     offra = header.get("OFFSETRA", "")
@@ -358,6 +336,9 @@ def write_h5py(h5py_path, header, lambdas, pixpos):
         if "pixpos" in f:
             del f["pixpos"]
         f.create_dataset("pixpos", data=pixpos)
+        if "converged" in f:
+            del f["converged"]
+        f.create_dataset("converged", data=converged)
 
 
 def crosscorr_roop(fits_path, h5py_path):
@@ -367,8 +348,9 @@ def crosscorr_roop(fits_path, h5py_path):
     with fits.open(fits_path, memmap=False) as hdul:
         data = hdul[0].data
 
-    y_indices = list(range(10, 501))
+    y_indices = list(range(10, 500))
     pixpos = np.empty((8, len(y_indices)), dtype=np.float32)
+    converged = np.empty((8, len(y_indices)), dtype=bool)
     lambdas = None  # ループ内で毎回更新されるが、最終的に最後の値を保存する点は従来実装と同じ
 
     for j, raw_idx in enumerate(y_indices):
@@ -382,31 +364,33 @@ def crosscorr_roop(fits_path, h5py_path):
         corr, best_lag, max_corr = get_cross_corr(center_row, kernel)
         snt_result, lambdas = get_sawtooth_center(center_row, mu_wavelength_pairs, best_lag)
         pixpos[:, j] = np.array([r.xc for r in snt_result], dtype=np.float32)
+        converged[:, j] = np.array([r.converged for r in snt_result], dtype=bool)
 
-    write_h5py(h5py_path, header, lambdas, pixpos)
+    write_h5py(h5py_path, header, lambdas, pixpos, converged)
 
 
 
-def work_per_object(object_name, fits_dict):
-    setup_object_logger(object_name)
-    for date_label, base_name_list in fits_dict.items():
-        do_scp_raw_fits(date_label, object_name, base_name_list)
+def work_per_date_label(object_name: str, date_label: str, base_name_list: List[str]) -> None:
+    """date_label ごとに処理を行うワーカー関数。"""
+    setup_object_logger(object_name, date_label)
 
-        for base_name in base_name_list:
-            fits_path = Path(RAWDATA_DIR) / object_name / date_label / base_name
-            h5py_filename = base_name.replace(".fits", ".h5")
-            h5py_path = Path(WORK_DIR) / object_name / date_label / h5py_filename
-            h5py_path.parent.mkdir(parents=True, exist_ok=True)
-            if not fits_path.exists():
-                logging.warning(f"{fits_path} does not exist. skipping.")
-                continue
-            if h5py_path.exists():
-                logging.warning(f"{h5py_path} already exists. skipping.")
-                continue
-            logging.info(f"processing {fits_path}")
-            crosscorr_roop(fits_path, h5py_path)
-        
-        do_remove_raw_fits(date_label, object_name)
+    do_scp_raw_fits(date_label, object_name, base_name_list)
+
+    for base_name in base_name_list:
+        fits_path = Path(RAWDATA_DIR) / object_name / date_label / base_name
+        h5py_filename = base_name.replace(".fits", ".h5")
+        h5py_path = Path(WORK_DIR) / date_label / object_name / h5py_filename
+        h5py_path.parent.mkdir(parents=True, exist_ok=True)
+        if not fits_path.exists():
+            logging.warning(f"{fits_path} does not exist. skipping.")
+            continue
+        if h5py_path.exists():
+            logging.warning(f"{h5py_path} already exists. skipping.")
+            continue
+        logging.info(f"processing {fits_path}")
+        crosscorr_roop(fits_path, h5py_path)
+
+    do_remove_raw_fits(date_label, object_name)
 
 
 
@@ -432,12 +416,6 @@ def get_object_list(path: Path):
                 objects.append(row[1])
     return objects
 
-def get_work_dir_path(object_name: str, date_label: str) -> Path:
-    """WORK_DIR/object_name/date_label に対応する出力ディレクトリを返す。"""
-    d = Path(WORK_DIR) / object_name / date_label
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
 
 
 def main():
@@ -450,35 +428,29 @@ def main():
     logging.info(f"reading object list from {csv_path}")
     objects = get_object_list(csv_path)
 
-    fits_dict_list = []
+    jobs = []
     total_objects = len(objects)
     logging.info(f"number of objects from csv: {total_objects}")
     logging.info(f"starting db_search for {total_objects} objects")
     for idx, object_name in enumerate(objects, 1):
-        #logging.info(f"[{idx}/{total_objects}] db_search for object={object_name}")
         fits_dict = db_search(conn, object_name)
-        #logging.info(f"[{idx}/{total_objects}] finished db_search for object={object_name}, date_labels={len(fits_dict)}")
-        fits_dict_list.append((object_name, fits_dict))
+        for date_label, base_name_list in fits_dict.items():
+            jobs.append((object_name, date_label, base_name_list))
     conn.close()
 
-
-    with ProcessPoolExecutor(max_workers=10, initializer=worker_init) as ex:
-        future_to_object = {
-            ex.submit(work_per_object, object_name, fits_dict): object_name
-            for object_name, fits_dict in fits_dict_list
+    with ProcessPoolExecutor(max_workers=15, initializer=worker_init) as ex:
+        future_to_job = {
+            ex.submit(work_per_date_label, object_name, date_label, base_name_list): (object_name, date_label)
+            for object_name, date_label, base_name_list in jobs
         }
-        total = len(future_to_object)
+        total = len(future_to_job)
         done = 0
-        for fut in as_completed(future_to_object):
-            object_name = future_to_object[fut]
+        for fut in as_completed(future_to_job):
+            object_name, date_label = future_to_job[fut]
             done += 1
-            sys.stdout.write(f"[{done}/{total}] finished {object_name}\n")
+            sys.stdout.write(f"[{done}/{total}] finished {object_name} {date_label}\n")
             sys.stdout.flush()
             fut.result()
-
-
-    #for object_name, fits_dict in fits_dict_list:
-    #    work_per_object(object_name, fits_dict)
 
     
 
