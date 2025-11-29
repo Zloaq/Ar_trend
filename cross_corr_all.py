@@ -340,9 +340,9 @@ def write_h5py(h5py_path, header, lambdas, pixpos):
     offra = header.get("OFFSETRA", "")
     offde = header.get("OFFSETDE", "")
     offro = header.get("OFFSETRO", "")
-    azi = header.get("AZIMUTH", "")
-    alt = header.get("ALTITUDE", "")
-    rot = header.get("ROTATOR", "")
+    azi   = header.get("AZIMUTH", "")
+    alt   = header.get("ALTITUDE", "")
+    rot   = header.get("ROTATOR", "")
 
     with h5py.File(h5py_path, "a") as f:
         f.attrs["object_name"] = object_name
