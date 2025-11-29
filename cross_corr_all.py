@@ -338,7 +338,7 @@ def write_h5py(h5py_path, header, lambdas, pixpos):
     object_name = header.get("OBJECT", "")
     mjd = header.get("MJD", "")
     offra = header.get("OFFSETRA", "")
-    offde = header.get("OFFSEDE", "")
+    offde = header.get("OFFSETDE", "")
     offro = header.get("OFFSETRO", "")
     azi = header.get("AZIMUTH", "")
     alt = header.get("ALTITUDE", "")
