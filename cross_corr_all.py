@@ -312,7 +312,7 @@ def get_sawtooth_center(center_row, mu_wavelength_pairs, best_lag):
     return snt_results, lambdas
 
 
-def write_h5py(h5py_path, header, lambdas, pixpos, converged):
+def write_h5py(h5py_path, header, lambdas, pixpos, converged, pix_vals):
     object_name = header.get("OBJECT", "")
     mjd = header.get("MJD", "")
     offra = header.get("OFFSETRA", "")
@@ -339,9 +339,12 @@ def write_h5py(h5py_path, header, lambdas, pixpos, converged):
         if "converged" in f:
             del f["converged"]
         f.create_dataset("converged", data=converged)
+        if "pix_vals" in f:
+            del f["pix_vals"]
+        f.create_dataset("pix_vals", data=pix_vals)
 
 
-def crosscorr_roop(fits_path, h5py_path):
+def crosscorr_roop(fits_path, h5py_path, window_size=11):
 
     # ヘッダと画像データを一度だけメモリ上に展開する
     header = fits.getheader(fits_path)
@@ -349,6 +352,7 @@ def crosscorr_roop(fits_path, h5py_path):
         data = hdul[0].data
 
     y_indices = list(range(10, 500))
+    pix_vals = np.empty((len(y_indices), 8 * window_size), dtype=np.float32)
     pixpos = np.empty((8, len(y_indices)), dtype=np.float32)
     converged = np.empty((8, len(y_indices)), dtype=bool)
     lambdas = None  # ループ内で毎回更新されるが、最終的に最後の値を保存する点は従来実装と同じ
@@ -363,12 +367,28 @@ def crosscorr_roop(fits_path, h5py_path):
 
         corr, best_lag, max_corr = get_cross_corr(center_row, kernel)
         snt_result, lambdas = get_sawtooth_center(center_row, mu_wavelength_pairs, best_lag)
-        #保存ファイルは 1start
+
+        xcs = np.array([r.xc for r in snt_result])  # 8 個（0始まりの float とみなす）
+        xcs_int = np.rint(xcs).astype(int)
+
+        # 窓の開始インデックス（中心から window_size//2 分ずらす）
+        half = window_size // 2
+        starts = xcs_int - half
+
+        # 先頭側(start<0)・けつ側(start+window_size>len(center_row))のはみ出しをまとめてクリップ
+        max_start = center_row.size - window_size
+        starts = np.clip(starts, 0, max_start)
+        # shape = (8, window_size) のインデックスを作って一気にスライス
+        idx = starts[:, None] + np.arange(window_size)
+        win_segments = center_row[idx]  # (8, window_size)
+
+        # 1start で保存（従来どおり）
         pixpos[:, j] = np.array([r.xc + 1 for r in snt_result], dtype=np.float32)
-        #pixpos[:, j] = np.array([r.xc for r in snt_result], dtype=np.float32)
         converged[:, j] = np.array([r.converged for r in snt_result], dtype=bool)
 
-    write_h5py(h5py_path, header, lambdas, pixpos, converged)
+        # C案: 8本分を1次元に連結して N_y x (8*window_size)
+        pix_vals[j, :] = win_segments.ravel()
+    write_h5py(h5py_path, header, lambdas, pixpos, converged, pix_vals)
 
 
 
