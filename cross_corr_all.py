@@ -363,6 +363,8 @@ def crosscorr_roop(fits_path, h5py_path):
 
         corr, best_lag, max_corr = get_cross_corr(center_row, kernel)
         snt_result, lambdas = get_sawtooth_center(center_row, mu_wavelength_pairs, best_lag)
+        #保存ファイルは 1start
+        #pixpos[:, j] = np.array([r.xc + 1 for r in snt_result], dtype=np.float32)
         pixpos[:, j] = np.array([r.xc for r in snt_result], dtype=np.float32)
         converged[:, j] = np.array([r.converged for r in snt_result], dtype=bool)
 
