@@ -323,16 +323,47 @@ def write_h5py(h5py_path, header, lambdas, pixpos, converged, pix_vals):
     alt   = header.get("ALTITUDE", "")
     rot   = header.get("ROTATOR", "")
 
+    # collect IMCMB*** cards and NCOMBINE from header
+    imcmb_items = []
+    ncombine = None
+    for key in header:
+        if key.startswith("IMCMB"):
+            imcmb_items.append((key, header[key]))
+        elif key == "NCOMBINE":
+            ncombine = header[key]
+
+    # sort IMCMB by key (IMCMB001, IMCMB002, ...)
+    imcmb_items.sort(key=lambda kv: kv[0])
+    imcmb_values = [v for _, v in imcmb_items]
+
     with h5py.File(h5py_path, "a") as f:
-        f.attrs["object_name"] = object_name
-        f.attrs["mjd"] = mjd
-        f.attrs["offra"] = offra
-        f.attrs["offde"] = offde
-        f.attrs["offro"] = offro
-        f.attrs["azi"] = azi
-        f.attrs["alt"] = alt
-        f.attrs["rot"] = rot
+        header_grp = f.require_group("header")
+
+        # store main header values as attributes on /header
+        header_grp.attrs["object_name"] = object_name
+        header_grp.attrs["mjd"] = mjd
+        header_grp.attrs["offra"] = offra
+        header_grp.attrs["offde"] = offde
+        header_grp.attrs["offro"] = offro
+        header_grp.attrs["azi"] = azi
+        header_grp.attrs["alt"] = alt
+        header_grp.attrs["rot"] = rot
+
+        # IMCMB dataset as a single string (newline-separated), always recreate
+        imcmb_str = "\n".join(str(v) for v in imcmb_values) if imcmb_values else ""
+        if "IMCMB" in header_grp:
+            del header_grp["IMCMB"]
+        header_grp.create_dataset("IMCMB", data=np.string_(imcmb_str))
+
+        # NCOMBINE as an attribute on /header (always present)
+        if ncombine is not None:
+            header_grp.attrs["NCOMBINE"] = int(ncombine)
+        else:
+            header_grp.attrs["NCOMBINE"] = 1
+
+        # keep lambdas as a root attribute
         f.attrs["lambdas"] = lambdas
+
         # save 8 x N_y array of xc values
         if "pixpos" in f:
             del f["pixpos"]
