@@ -475,6 +475,7 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
                 card_key = f"IMCMB{idx:03d}"
                 header_ref[card_key] = (name_no_ext, "combined frame")
             header_ref["NCOMBINE"] = (len(imcmb_values), "number of frames combined")
+            header_ref["BITPIX"] = (-32, "data type")
 
             hdu = fits.PrimaryHDU(data=combined.astype(np.float32), header=header_ref)
             cmb_fits_path.parent.mkdir(parents=True, exist_ok=True)
