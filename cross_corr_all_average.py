@@ -58,7 +58,7 @@ DB_PATH = os.getenv("DB_PATH")
 RAID_PC = os.getenv("RAID_PC")
 RAID_DIR = os.getenv("RAID_DIR")
 RAWDATA_DIR= os.getenv("RAWDATA_DIR")
-WORK_DIR = os.getenv("WORK_DIR")
+WORK_DIR = os.getenv("WORK_DIR_ave")
 KERNEL_CONFIG_DIR = os.getenv("KERNEL_CONFIG_DIR")
 
 # Required local files and kernel configurations
@@ -548,7 +548,7 @@ def main():
             jobs.append((object_name, date_label, base_name_list))
     conn.close()
 
-    with ProcessPoolExecutor(max_workers=16, initializer=worker_init) as ex:
+    with ProcessPoolExecutor(max_workers=13, initializer=worker_init) as ex:
         future_to_job = {
             ex.submit(work_per_date_label, object_name, date_label, base_name_list): (object_name, date_label)
             for object_name, date_label, base_name_list in jobs
