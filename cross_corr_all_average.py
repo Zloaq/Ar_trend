@@ -353,7 +353,8 @@ def write_h5py(h5py_path, header, lambdas, pixpos, converged, pix_vals):
         imcmb_str = "\n".join(str(v) for v in imcmb_values) if imcmb_values else ""
         if "IMCMB" in header_grp:
             del header_grp["IMCMB"]
-        header_grp.create_dataset("IMCMB", data=np.string_(imcmb_str))
+        dt = h5py.string_dtype(encoding="utf-8")
+        header_grp.create_dataset("IMCMB", data=imcmb_str, dtype=dt)
 
         # NCOMBINE as an attribute on /header (always present)
         if ncombine is not None:
