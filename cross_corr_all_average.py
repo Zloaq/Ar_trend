@@ -425,6 +425,16 @@ def crosscorr_roop(fits_path, h5py_path, window_size=11):
 
 
 
+def _hdr_rounded_int(hdr, key: str):
+    """FITS ヘッダから key を取り出し、数値なら四捨五入した整数にして返す。
+    数値に変換できなければ、そのままの値を返す。
+    """
+    val = hdr.get(key, "")
+    try:
+        return int(round(float(val)))
+    except (TypeError, ValueError):
+        return val
+
 def work_per_date_label(object_name: str, date_label: str, base_name_list: List[str]) -> None:
     """date_label ごとに処理を行うワーカー関数。
 
@@ -454,15 +464,14 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
         except OSError as e:
             logging.warning(f"failed to open {fits_path}: {e}. skipping.")
             continue
-
         key = (
             hdr.get("OBJECT", ""),
-            hdr.get("OFFSETRA", ""),
-            hdr.get("OFFSETDE", ""),
-            hdr.get("OFFSETRO", ""),
-            hdr.get("AZIMUTH", ""),
-            hdr.get("ALTITUDE", ""),
-            hdr.get("ROTATOR", ""),
+            _hdr_rounded_int(hdr, "OFFSETRA"),
+            _hdr_rounded_int(hdr, "OFFSETDE"),
+            _hdr_rounded_int(hdr, "OFFSETRO"),
+            _hdr_rounded_int(hdr, "AZIMUTH"),
+            _hdr_rounded_int(hdr, "ALTITUDE"),
+            _hdr_rounded_int(hdr, "ROTATOR"),
         )
         groups[key].append((base_name, fits_path))
 
