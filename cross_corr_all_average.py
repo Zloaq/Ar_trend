@@ -377,7 +377,7 @@ def write_h5py(h5py_path, header, lambdas, pixpos, converged, pix_vals):
         f.create_dataset("pix_vals", data=pix_vals)
 
 
-def crosscorr_roop(fits_path, h5py_path, window_size=11):
+def crosscorr_roop(fits_path, h5py_path, window_size=31):
 
     # ヘッダと画像データを一度だけメモリ上に展開する
     header = fits.getheader(fits_path)
