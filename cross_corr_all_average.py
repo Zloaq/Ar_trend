@@ -265,9 +265,12 @@ def do_scp_noise_fits(date_label: str, base_name_list: List[str]) -> None:
 
     dst_dir = Path(RAWDATA_DIR) / "noise" / date_label
 
+    # 既に noise 用の raw FITS があれば scp はスキップ
     if dst_dir.exists():
-        logging.warning(f"Noise directory already exists: {dst_dir}")
-        return
+        existing_spec = list(dst_dir.glob("noise*.fits"))
+        if existing_spec:
+            logging.info(f"Noise FITS already exist in {dst_dir}. skip scp.")
+            return
 
     dst_dir.mkdir(parents=True, exist_ok=True)
 
@@ -692,7 +695,16 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
             except:
                 exptime = 0
                 
-            noise_header, noise_data = load_noise(date_label, exptime)
+            res = load_noise(date_label, exptime)
+            if res is not None:
+                noise_header, noise_data = res
+                try:
+                    noise_obname = noise_header["OBJECT"]
+                except Exception:
+                    noise_obname = "noise"
+            else:
+                noise_data = None
+                noise_obname = "noise"
             
             try:
                 noise_obname = noise_header["OBJECT"]
