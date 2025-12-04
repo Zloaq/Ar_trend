@@ -76,7 +76,7 @@ KERNEL_CONFIG = [
     ((384, 512), Path(KERNEL_CONFIG_DIR) / "kernel_with_ranges_448.npz"),
 ]
 
-KERNEL_CACHE: Dict[Tuple[int, int], Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict]] = {}
+KERNEL_CACHE: Tuple[np.ndarray, np.ndarray] = {}
 
 
 def read_kernel_npz(npz_path):
@@ -243,7 +243,7 @@ scp {RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{{{num_min:04d}..{nu
     logging.info(f"scp_raw_fits: scp command end")
 
 
-def do_scp_dark_fits(date_label: str, base_name_list: List[str]) -> None:
+def do_scp_noise_fits(date_label: str, base_name_list: List[str]) -> None:
     # Extract Num1 from basenames
     if not base_name_list:
         logging.warning(f"No valid base_name_list for {date_label}")
@@ -263,10 +263,10 @@ def do_scp_dark_fits(date_label: str, base_name_list: List[str]) -> None:
     num_min = int(num1_list[0])
     num_max = int(num1_list[-1])
 
-    dst_dir = Path(RAWDATA_DIR) / "dark" / date_label
+    dst_dir = Path(RAWDATA_DIR) / "noise" / date_label
 
     if dst_dir.exists():
-        logging.warning(f"Dark directory already exists: {dst_dir}")
+        logging.warning(f"Noise directory already exists: {dst_dir}")
         return
 
     dst_dir.mkdir(parents=True, exist_ok=True)
@@ -286,23 +286,23 @@ scp {RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{{{num_min:04d}..{nu
         tmp.write(script_content)
     result = subprocess.run(["bash", script_path], capture_output=True, text=True)
 
-    logging.info(f"scp_raw_fits: scp command end")
+    logging.info(f"scp_noise_fits: scp command end")
 
 
-def do_average_dark(date_label: str):
-    dst_dir = Path(RAWDATA_DIR) / "dark" / date_label
+def do_average_noise(date_label: str):
+    dst_dir = Path(RAWDATA_DIR) / "noise" / date_label
     if not dst_dir.exists():
-        logging.warning(f"Dark directory does not exist: {dst_dir}")
+        logging.warning(f"Noise directory does not exist: {dst_dir}")
         return
 
-    dark_list = list(dst_dir.glob("spec*.fits"))
-    if not dark_list:
-        logging.warning(f"No dark files found in {dst_dir}")
+    noise_list = list(dst_dir.glob("spec*.fits"))
+    if not noise_list:
+        logging.warning(f"No noize files found in {dst_dir}")
         return
 
     # EXP_TIME ごとにグループ分け
     groups = defaultdict(list)  # key: exptime (float), value: list[Path]
-    for fits_path in dark_list:
+    for fits_path in noise_list:
         try:
             with warnings.catch_warnings():
                 # Astropy の warning を例外に格上げして、壊れていそうな FITS を弾く
@@ -321,10 +321,10 @@ def do_average_dark(date_label: str):
         groups[exptime_val].append(fits_path)
 
     if not groups:
-        logging.warning(f"No valid dark groups (by EXP_TIME) found in {dst_dir}")
+        logging.warning(f"No valid noise groups (by EXP_TIME) found in {dst_dir}")
         return
 
-    # グループごとに平均化して dark{date_label}_{EXPTIME:%02}.fits で保存
+    # グループごとに平均化して noise{date_label}_{EXPTIME:%02}.fits で保存
     for exptime_val, files in sorted(groups.items(), key=lambda kv: kv[0]):
         if not files:
             continue
@@ -386,12 +386,12 @@ def do_average_dark(date_label: str):
         )
 
     
-def load_dark(date_label: str, exptime: int):
-    dark_path = Path(RAWDATA_DIR) / "dark" / date_label / f"dark{date_label}_{exptime:02d}.fits"
-    if not dark_path.exists():
-        logging.warning(f"Dark file does not exist: {dark_path}")
+def load_noise(date_label: str, exptime: int):
+    noise_path = Path(RAWDATA_DIR) / "noise" / date_label / f"dark{date_label}_{exptime:02d}.fits"
+    if not noise_path.exists():
+        logging.warning(f"Noise file does not exist: {noise_path}")
         return None
-    with fits.open(dark_path, memmap=False) as hdul:
+    with fits.open(noise_path, memmap=False) as hdul:
         data = hdul[0].data.astype(np.float64)
     return data
 
@@ -599,7 +599,7 @@ def _hdr_rounded_int(hdr, key: str):
     except (TypeError, ValueError):
         return val
 
-def work_per_date_label(object_name: str, date_label: str, base_name_list: List[str], dark_base_name_list: List[str]) -> None:
+def work_per_date_label(object_name: str, date_label: str, base_name_list: List[str], dark_base_name_list: List[str], aroff_base_name_list: List[str]) -> None:
     """date_label ごとに処理を行うワーカー関数。
 
     base_name_list に含まれるすべての FITS のヘッダーを読み込み、
@@ -615,9 +615,12 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
     # 必要な生 FITS をいったんローカルにコピー
     do_scp_raw_fits(date_label, object_name, base_name_list)
     # dark を全てローカルにコピー
-    do_scp_dark_fits(date_label, dark_base_name_list)
+    if aroff_base_name_list:
+        do_scp_noise_fits(date_label, aroff_base_name_list)
+    else:
+        do_scp_noise_fits(date_label, dark_base_name_list)
     # dark を積分時間ごとに平均化
-    do_average_dark(date_label)
+    do_average_noise(date_label)
 
     # ヘッダーのキーでグループ分け
     groups = defaultdict(list)  # key: header tuple, value: list[(base_name, fits_path)]
@@ -683,7 +686,7 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
             except:
                 exptime = 0
                 
-            dark_data = load_dark(date_label, exptime)
+            dark_data = load_noise(date_label, exptime)
             
             stack = np.stack(data_list, axis=0)
             if dark_data is not None:
@@ -727,7 +730,7 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
 
     # 生 FITS は最後にまとめて削除
     do_remove_raw_fits(date_label, object_name)
-    do_remove_raw_fits(date_label, "dark")
+    do_remove_raw_fits(date_label, "noise")
 
 
 
@@ -765,25 +768,55 @@ def main():
     logging.info(f"reading object list from {csv_path}")
     objects = get_object_list(csv_path)
 
-    jobs = []
     total_objects = len(objects)
     logging.info(f"number of objects from csv: {total_objects}")
-    logging.info(f"starting db_search for {total_objects} objects")
-    for idx, object_name in enumerate(tqdm.tqdm(objects, total=total_objects, desc="db_search"), 1):
-        fits_dict = db_search(conn, object_name)
+    logging.info("starting single query for all objects + dark")
+
+    def fetch_all_frames(conn, targets):
+        placeholders = ",".join("?" for _ in targets)
+        sql = f"""
+            SELECT object, date_label, base_name
+            FROM frames
+            WHERE filepath COLLATE NOCASE LIKE '%/spec%'
+              AND object IN ({placeholders})
+        """
+        cur = conn.cursor()
+        cur.execute(sql, targets)
+        return cur.fetchall()  # [(object, date_label, base_name), ...]
+
+    # science の object 一覧 + dark をまとめて投げる
+    aroff = ["Ar_off", "Ar-off", "Ar-Off", "Ar_Off"]
+    targets = objects + ["dark"] + aroff
+    rows = fetch_all_frames(conn, targets)
+
+    # object/date_label ごとに science をまとめる
+    spec_map = defaultdict(lambda: defaultdict(list))
+    # date_label ごとに dark をまとめる
+    dark_map = defaultdict(list)
+    aroff_map = defaultdict(list)
+
+    for obj, date_label, base_name in rows:
+        if obj == "dark":
+            dark_map[date_label].append(base_name)
+        elif obj in aroff:
+            aroff_map[date_label].append(base_name)
+        else:
+            spec_map[obj][date_label].append(base_name)
+
+    jobs = []
+    for object_name in objects:
+        fits_dict = spec_map.get(object_name, {})
         for date_label, base_name_list in fits_dict.items():
-            dark_fits_dict = db_search(conn, "dark", date_label)
-            if date_label in dark_fits_dict:
-                dark_base_name_list = dark_fits_dict[date_label]
-            else:
-                dark_base_name_list = []
-            jobs.append((object_name, date_label, base_name_list, dark_base_name_list))
+            dark_base_name_list = dark_map.get(date_label, [])
+            aroff_base_name_list = aroff_map.get(date_label, [])
+            jobs.append((object_name, date_label, base_name_list, dark_base_name_list, aroff_base_name_list))
+
     conn.close()
 
     with ProcessPoolExecutor(max_workers=15, initializer=worker_init) as ex:
         future_to_job = {
-            ex.submit(work_per_date_label, object_name, date_label, base_name_list, dark_base_name_list): (object_name, date_label)
-            for object_name, date_label, base_name_list, dark_base_name_list in jobs
+            ex.submit(work_per_date_label, object_name, date_label, base_name_list, dark_base_name_list, aroff_base_name_list): (object_name, date_label)
+            for object_name, date_label, base_name_list, dark_base_name_list, aroff_base_name_list in jobs
         }
         total = len(future_to_job)
         done = 0
