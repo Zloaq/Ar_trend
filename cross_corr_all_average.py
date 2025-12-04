@@ -376,7 +376,7 @@ def do_average_noise(date_label: str):
 
         # EXPTIME を整数秒に丸めてファイル名に使用
         exptime_int = int(round(exptime_val))
-        out_name = f"dark{date_label}_{exptime_int:02d}.fits"
+        out_name = f"noise{date_label}_{exptime_int:02d}.fits"
         out_path = dst_dir / out_name
 
         if out_path.exists():
