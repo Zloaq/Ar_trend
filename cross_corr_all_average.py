@@ -335,11 +335,20 @@ def do_average_noise(date_label: str):
         if not files:
             continue
 
+        # 1つの EXP_TIME につき noise は最大 10 枚まで使う
+        files = sorted(files)
+        if len(files) > 10:
+            logging.info(
+                f"Noise frames for {date_label} EXP_TIME={exptime_val} are {len(files)}; "
+                f"using first 10 frames for averaging."
+            )
+            files = files[:10]
+
         data_list = []
         header_ref = None
         imcmb_values = []
 
-        for idx, fits_path in enumerate(sorted(files), start=1):
+        for idx, fits_path in enumerate(files, start=1):
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("error", AstropyWarning)
@@ -365,8 +374,10 @@ def do_average_noise(date_label: str):
 
         # ヘッダに IMCMBnnn と NCOMBINE を追加
         for idx, name_no_ext in enumerate(imcmb_values, start=1):
+            if idx > 999:
+                break  # 1000枚目以降はカード打たない
             card_key = f"IMCMB{idx:03d}"
-            header_ref[card_key] = (name_no_ext, "combined dark frame")
+            header_ref[card_key] = (name_no_ext, "combined frame")
         header_ref["NCOMBINE"] = (len(imcmb_values), "number of dark frames combined")
         header_ref["BITPIX"] = (-32, "data type")
 
