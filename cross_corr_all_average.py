@@ -401,7 +401,7 @@ def load_noise(date_label: str, exptime: int):
 
 def do_remove_raw_fits(date_label: str, object_name: str):
     target_dir = Path(RAWDATA_DIR) / object_name / date_label
-    cmd = ["rm", "-f", str(target_dir / "spec*.fits")]
+    cmd = ["rm", "-f", str(target_dir / "spec*-????.fits")]
     subprocess.run(" ".join(cmd), shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
