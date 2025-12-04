@@ -76,6 +76,16 @@ KERNEL_CONFIG = [
 KERNEL_CACHE: Dict[Tuple[int, int], Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict]] = {}
 
 
+def read_kernel_npz(npz_path):
+    with np.load(npz_path, allow_pickle=True) as data:
+        kernel = data["kernel"]
+        fit_ranges = data["fit_ranges"]
+        ar_features = data["ar_features"]
+        mu_wavelength_pairs = data["pix_wavelength_pairs"]
+        meta = data["meta"]
+    return kernel, fit_ranges, ar_features, mu_wavelength_pairs, meta
+
+
 def _ensure_kernel_cache_loaded() -> None:
     """
     KERNEL_CONFIG で指定された npz を一度だけ読み込み、メモリ上にキャッシュする。
@@ -249,16 +259,6 @@ def chose_row_cut_ar_fits(fits_path, raw_idx):
     hdul.close()
     center_row = data[raw_idx, :]
     return center_row
-
-
-def read_kernel_npz(npz_path):
-    with np.load(npz_path, allow_pickle=True) as data:
-        kernel = data["kernel"]
-        fit_ranges = data["fit_ranges"]
-        ar_features = data["ar_features"]
-        mu_wavelength_pairs = data["mu_wavelength_pairs"]
-        meta = data["meta"]
-    return kernel, fit_ranges, ar_features, mu_wavelength_pairs, meta
 
 
 def get_cross_corr(ar_data, kernel):
