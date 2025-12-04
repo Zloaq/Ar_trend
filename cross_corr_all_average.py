@@ -757,7 +757,6 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
     logging.info(f"END   job pid={os.getpid()} {object_name} {date_label}")
     do_remove_raw_fits(date_label, object_name)
     do_remove_raw_fits(date_label, "noise")
-    sys.exit(0)
 
 
 
