@@ -360,7 +360,7 @@ def do_average_dark(date_label: str):
 
         # EXPTIME を整数秒に丸めてファイル名に使用
         exptime_int = int(round(exptime_val))
-        out_name = f"_dark{date_label}_{exptime_int:02d}.fits"
+        out_name = f"dark{date_label}_{exptime_int:02d}.fits"
         out_path = dst_dir / out_name
 
         if out_path.exists():
@@ -373,7 +373,7 @@ def do_average_dark(date_label: str):
         )
 
     
-def load_dark(date_label: str, exptime: str):
+def load_dark(date_label: str, exptime: int):
     dark_path = Path(RAWDATA_DIR) / "dark" / date_label / f"dark{date_label}_{exptime:02d}.fits"
     if not dark_path.exists():
         logging.warning(f"Dark file does not exist: {dark_path}")
@@ -664,7 +664,12 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
                 logging.warning(f"no data to combine for group key={key}. skipping.")
                 continue
             
-            exptime = header_ref["EXPTIME"]
+            exptime = header_ref["EXP_TIME"]
+            try:
+                exptime = int(exptime)
+            except:
+                exptime = 0
+                
             dark_data = load_dark(date_label, exptime)
             
             stack = np.stack(data_list, axis=0)
@@ -754,8 +759,11 @@ def main():
     for idx, object_name in enumerate(tqdm.tqdm(objects, total=total_objects, desc="db_search"), 1):
         fits_dict = db_search(conn, object_name)
         for date_label, base_name_list in fits_dict.items():
-            dark_fits_dict = db_search(conn, object_name, date_label)
-            dark_base_name_list = dark_fits_dict[date_label]
+            dark_fits_dict = db_search(conn, "dark", date_label)
+            if date_label in dark_fits_dict:
+                dark_base_name_list = dark_fits_dict[date_label]
+            else:
+                dark_base_name_list = []
             jobs.append((object_name, date_label, base_name_list, dark_base_name_list))
     conn.close()
 
