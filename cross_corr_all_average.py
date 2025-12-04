@@ -317,6 +317,9 @@ def do_average_noise(date_label: str):
         except (TypeError, ValueError):
             logging.warning(f"failed to read EXP_TIME from {fits_path}. skipping.")
             continue
+        except OSError as e:
+            logging.warning(f"failed to open {fits_path}: {e}. skipping.")
+            continue
 
         groups[exptime_val].append(fits_path)
 
@@ -611,6 +614,7 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
     その合成 FITS を crosscorr_roop に渡して .h5 を 1 つ作る。
     """
     setup_object_logger(object_name, date_label)
+    logging.info(f"START job pid={os.getpid()} {object_name} {date_label}")
 
     # 必要な生 FITS をいったんローカルにコピー
     do_scp_raw_fits(date_label, object_name, base_name_list)
@@ -726,9 +730,12 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
         logging.info(
             f"processing combined FITS {cmb_fits_path} (group size={len(members)})"
         )
+        logging.info(f"START crosscorr {cmb_fits_path}")
         crosscorr_roop(cmb_fits_path, h5py_path)
+        logging.info(f"END   crosscorr {cmb_fits_path}")
 
     # 生 FITS は最後にまとめて削除
+    logging.info(f"END   job pid={os.getpid()} {object_name} {date_label}")
     do_remove_raw_fits(date_label, object_name)
     do_remove_raw_fits(date_label, "noise")
 
