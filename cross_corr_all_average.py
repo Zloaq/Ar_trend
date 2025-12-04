@@ -4,6 +4,7 @@ import os
 import sys
 import csv
 import glob
+import tqdm
 import logging
 import tempfile
 import subprocess
@@ -158,6 +159,9 @@ def validate_environment() -> None:
     for (ymin, ymax), kernel_path in KERNEL_CONFIG:
         if not kernel_path.exists():
             errors.append(f"kernel npz が見つかりません (y-range [{ymin}, {ymax})): {kernel_path}")
+        kernel, fit_ranges, ar_features, mu_wavelength_pairs, meta = read_kernel_npz(kernel_path)
+        if kernel is None or fit_ranges is None or ar_features is None or mu_wavelength_pairs is None or meta is None:
+            errors.append(f"kernel npz が読み込めません (y-range [{ymin}, {ymax})): {kernel_path}")
 
     if errors:
         for msg in errors:
@@ -584,7 +588,7 @@ def main():
     total_objects = len(objects)
     logging.info(f"number of objects from csv: {total_objects}")
     logging.info(f"starting db_search for {total_objects} objects")
-    for idx, object_name in enumerate(objects, 1):
+    for idx, object_name in enumerate(tqdm.tqdm(objects, total=total_objects, desc="db_search"), 1):
         fits_dict = db_search(conn, object_name)
         for date_label, base_name_list in fits_dict.items():
             jobs.append((object_name, date_label, base_name_list))
