@@ -241,9 +241,151 @@ scp {RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{{{num_min:04d}..{nu
     logging.info(f"scp_raw_fits: scp command end")
 
 
+def do_scp_dark_fits(date_label: str, base_name_list: List[str]) -> None:
+    # Extract Num1 from basenames
+    if not base_name_list:
+        logging.warning(f"No valid base_name_list for {date_label}")
+        return
+    num1_set = set()
+    for bn in base_name_list:
+        m = re.match(r"spec\d{6}-(\d{4})\.fits", bn)
+        if m:
+            num1_set.add(m.group(1))
+
+    # If nothing matched, do nothing
+    if not num1_set:
+        logging.warning(f"No valid Num1 found in base_name_list for {date_label}")
+        return
+
+    num1_list = sorted(num1_set)
+    num_min = int(num1_list[0])
+    num_max = int(num1_list[-1])
+
+    dst_dir = Path(RAWDATA_DIR) / "dark" / date_label
+
+    if dst_dir.exists():
+        logging.warning(f"Dark directory already exists: {dst_dir}")
+        return
+
+    dst_dir.mkdir(parents=True, exist_ok=True)
+
+    # シェルスクリプトを即席で作って、bash で実行する   
+    script_content = f"""#!/bin/bash
+set -euo pipefail
+src="{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{{{num_min:04d}..{num_max:04d}}}.fits"
+dst="{dst_dir}"
+mkdir -p "$dst"
+echo "scp $src $dst"
+scp {RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{{{num_min:04d}..{num_max:04d}}}.fits "$dst"
+"""
+
+    with tempfile.NamedTemporaryFile("w", delete=False, suffix=".sh") as tmp:
+        script_path = tmp.name
+        tmp.write(script_content)
+    result = subprocess.run(["bash", script_path], capture_output=True, text=True)
+
+    logging.info(f"scp_raw_fits: scp command end")
+
+
+def do_average_dark(date_label: str):
+    dst_dir = Path(RAWDATA_DIR) / "dark" / date_label
+    if not dst_dir.exists():
+        logging.warning(f"Dark directory does not exist: {dst_dir}")
+        return
+
+    dark_list = list(dst_dir.glob("spec*.fits"))
+    if not dark_list:
+        logging.warning(f"No dark files found in {dst_dir}")
+        return
+
+    # EXP_TIME ごとにグループ分け
+    groups = defaultdict(list)  # key: exptime (float), value: list[Path]
+    for fits_path in dark_list:
+        try:
+            with fits.open(fits_path, memmap=False) as hdul:
+                hdr = hdul[0].header
+                exptime = hdr.get("EXP_TIME", None)
+            exptime_val = float(exptime)
+        except (TypeError, ValueError):
+            logging.warning(f"failed to read EXP_TIME from {fits_path}. skipping.")
+            continue
+
+        groups[exptime_val].append(fits_path)
+
+    if not groups:
+        logging.warning(f"No valid dark groups (by EXP_TIME) found in {dst_dir}")
+        return
+
+    # グループごとに平均化して dark{date_label}_{EXPTIME:%02}.fits で保存
+    for exptime_val, files in sorted(groups.items(), key=lambda kv: kv[0]):
+        if not files:
+            continue
+
+        data_list = []
+        header_ref = None
+        imcmb_values = []
+
+        for idx, fits_path in enumerate(sorted(files), start=1):
+            try:
+                with fits.open(fits_path, memmap=False) as hdul:
+                    if header_ref is None:
+                        header_ref = hdul[0].header.copy()
+                    data = hdul[0].data.astype(np.float64)
+                data_list.append(data)
+                imcmb_values.append(fits_path.name.rsplit(".fits", 1)[0])
+            except OSError as e:
+                logging.warning(f"failed to read data from {fits_path}: {e}. skipping.")
+                continue
+
+        if not data_list or header_ref is None:
+            logging.warning(f"No valid data to combine for dark group EXP_TIME={exptime_val} on {date_label}")
+            continue
+
+        stack = np.stack(data_list, axis=0)
+        combined = np.mean(stack, axis=0)
+
+        # ヘッダに IMCMBnnn と NCOMBINE を追加
+        for idx, name_no_ext in enumerate(imcmb_values, start=1):
+            card_key = f"IMCMB{idx:03d}"
+            header_ref[card_key] = (name_no_ext, "combined dark frame")
+        header_ref["NCOMBINE"] = (len(imcmb_values), "number of dark frames combined")
+        header_ref["BITPIX"] = (-32, "data type")
+
+        # EXP_TIME は代表値として exptime_val を保存しておく
+        try:
+            header_ref["EXP_TIME"] = (float(exptime_val), "exposure time of combined dark")
+        except Exception:
+            # もし何かあってもここは致命的ではないので無視
+            pass
+
+        # EXPTIME を整数秒に丸めてファイル名に使用
+        exptime_int = int(round(exptime_val))
+        out_name = f"_dark{date_label}_{exptime_int:02d}.fits"
+        out_path = dst_dir / out_name
+
+        if out_path.exists():
+            logging.warning(f"{out_path} already exists. overwriting.")
+        hdu = fits.PrimaryHDU(data=combined.astype(np.float32), header=header_ref)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        hdu.writeto(out_path, overwrite=True)
+        logging.info(
+            f"created averaged dark {out_path} from {len(imcmb_values)} frames (EXP_TIME={exptime_val})"
+        )
+
+    
+def load_dark(date_label: str, exptime: str):
+    dark_path = Path(RAWDATA_DIR) / "dark" / date_label / f"dark{date_label}_{exptime:02d}.fits"
+    if not dark_path.exists():
+        logging.warning(f"Dark file does not exist: {dark_path}")
+        return None
+    with fits.open(dark_path, memmap=False) as hdul:
+        data = hdul[0].data.astype(np.float64)
+    return data
+
+
 def do_remove_raw_fits(date_label: str, object_name: str):
     target_dir = Path(RAWDATA_DIR) / object_name / date_label
-    cmd = ["rm", "-f", str(target_dir / "*.fits")]
+    cmd = ["rm", "-f", str(target_dir / "spec*.fits")]
     subprocess.run(" ".join(cmd), shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
@@ -444,7 +586,7 @@ def _hdr_rounded_int(hdr, key: str):
     except (TypeError, ValueError):
         return val
 
-def work_per_date_label(object_name: str, date_label: str, base_name_list: List[str]) -> None:
+def work_per_date_label(object_name: str, date_label: str, base_name_list: List[str], dark_base_name_list: List[str]) -> None:
     """date_label ごとに処理を行うワーカー関数。
 
     base_name_list に含まれるすべての FITS のヘッダーを読み込み、
@@ -459,6 +601,10 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
 
     # 必要な生 FITS をいったんローカルにコピー
     do_scp_raw_fits(date_label, object_name, base_name_list)
+    # dark を全てローカルにコピー
+    do_scp_dark_fits(date_label, dark_base_name_list)
+    # dark を積分時間ごとに平均化
+    do_average_dark(date_label)
 
     # ヘッダーのキーでグループ分け
     groups = defaultdict(list)  # key: header tuple, value: list[(base_name, fits_path)]
@@ -484,6 +630,7 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
         )
         groups[key].append((base_name, fits_path))
 
+    
     # グループごとに平均画像を作成し、合成 FITS を crosscorr_roop に渡す
     for key, members in groups.items():
         if not members:
@@ -516,9 +663,18 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
             if not data_list:
                 logging.warning(f"no data to combine for group key={key}. skipping.")
                 continue
-
+            
+            exptime = header_ref["EXPTIME"]
+            dark_data = load_dark(date_label, exptime)
+            
             stack = np.stack(data_list, axis=0)
-            combined = np.mean(stack, axis=0)
+            if dark_data is not None:
+                combined = np.mean(stack - dark_data, axis=0)
+                header_ref["DARKFILE"] = (f"dark{date_label}_{exptime:02d}.fits", "dark frame")
+            else:
+                combined = np.mean(stack, axis=0)
+                header_ref["DARKFILE"] = ("", "dark frame")
+
 
             # ヘッダーに IMCMBnnn と NCOMBINE を追加
             for idx, name_no_ext in enumerate(imcmb_values, start=1):
@@ -526,6 +682,7 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
                 header_ref[card_key] = (name_no_ext, "combined frame")
             header_ref["NCOMBINE"] = (len(imcmb_values), "number of frames combined")
             header_ref["BITPIX"] = (-32, "data type")
+
 
             hdu = fits.PrimaryHDU(data=combined.astype(np.float32), header=header_ref)
             cmb_fits_path.parent.mkdir(parents=True, exist_ok=True)
@@ -552,6 +709,7 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
 
     # 生 FITS は最後にまとめて削除
     do_remove_raw_fits(date_label, object_name)
+    do_remove_raw_fits(date_label, "dark")
 
 
 
@@ -596,13 +754,15 @@ def main():
     for idx, object_name in enumerate(tqdm.tqdm(objects, total=total_objects, desc="db_search"), 1):
         fits_dict = db_search(conn, object_name)
         for date_label, base_name_list in fits_dict.items():
-            jobs.append((object_name, date_label, base_name_list))
+            dark_fits_dict = db_search(conn, object_name, date_label)
+            dark_base_name_list = dark_fits_dict[date_label]
+            jobs.append((object_name, date_label, base_name_list, dark_base_name_list))
     conn.close()
 
     with ProcessPoolExecutor(max_workers=15, initializer=worker_init) as ex:
         future_to_job = {
-            ex.submit(work_per_date_label, object_name, date_label, base_name_list): (object_name, date_label)
-            for object_name, date_label, base_name_list in jobs
+            ex.submit(work_per_date_label, object_name, date_label, base_name_list, dark_base_name_list): (object_name, date_label)
+            for object_name, date_label, base_name_list, dark_base_name_list in jobs
         }
         total = len(future_to_job)
         done = 0
