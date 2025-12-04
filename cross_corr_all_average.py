@@ -82,9 +82,9 @@ def read_kernel_npz(npz_path):
         kernel = data["kernel"]
         fit_ranges = data["fit_ranges"]
         ar_features = data["ar_features"]
-        mu_wavelength_pairs = data["pix_wavelength_pairs"]
+        pix_wavelength_pairs = data["pix_wavelength_pairs"]
         meta = data["meta"]
-    return kernel, fit_ranges, ar_features, mu_wavelength_pairs, meta
+    return kernel, fit_ranges, ar_features, pix_wavelength_pairs, meta
 
 
 def _ensure_kernel_cache_loaded() -> None:
@@ -98,8 +98,8 @@ def _ensure_kernel_cache_loaded() -> None:
 
     cache: Dict[Tuple[int, int], Tuple[np.ndarray, np.ndarray]] = {}
     for (ymin, ymax), kernel_path in KERNEL_CONFIG:
-        kernel, fit_ranges, ar_features, mu_wavelength_pairs, meta = read_kernel_npz(kernel_path)
-        cache[(ymin, ymax)] = (kernel, mu_wavelength_pairs)
+        kernel, fit_ranges, ar_features, pix_wavelength_pairs, meta = read_kernel_npz(kernel_path)
+        cache[(ymin, ymax)] = (kernel, pix_wavelength_pairs)
     KERNEL_CACHE = cache
 
 
@@ -159,8 +159,8 @@ def validate_environment() -> None:
     for (ymin, ymax), kernel_path in KERNEL_CONFIG:
         if not kernel_path.exists():
             errors.append(f"kernel npz が見つかりません (y-range [{ymin}, {ymax})): {kernel_path}")
-        kernel, fit_ranges, ar_features, mu_wavelength_pairs, meta = read_kernel_npz(kernel_path)
-        if kernel is None or fit_ranges is None or ar_features is None or mu_wavelength_pairs is None or meta is None:
+        kernel, fit_ranges, ar_features, pix_wavelength_pairs, meta = read_kernel_npz(kernel_path)
+        if kernel is None or fit_ranges is None or ar_features is None or pix_wavelength_pairs is None or meta is None:
             errors.append(f"kernel npz が読み込めません (y-range [{ymin}, {ymax})): {kernel_path}")
 
     if errors:
@@ -291,10 +291,8 @@ def get_cross_corr(ar_data, kernel):
 
     return corr, best_lag, max_corr
 
-    
 
-
-def get_sawtooth_center(center_row, mu_wavelength_pairs, best_lag):
+def get_sawtooth_center(center_row, pix_wavelength_pairs, best_lag):
     """
     def newton_method(
     y: np.ndarray,
@@ -304,9 +302,9 @@ def get_sawtooth_center(center_row, mu_wavelength_pairs, best_lag):
     """
     snt_results = []
     lambdas = []
-    for mu_wavelength_pair in mu_wavelength_pairs:
-        #print(f"mu_wavelength_pair: {mu_wavelength_pair}")
-        mu_pix, wl = mu_wavelength_pair
+    for pix_wavelength_pair in pix_wavelength_pairs:
+        #print(f"pix_wavelength_pair: {pix_wavelength_pair}")
+        mu_pix, wl = pix_wavelength_pair
         mu_pix_crossed_for_python = mu_pix - 1 + best_lag
         snt_result = snt.newton_method(center_row, mu_pix_crossed_for_python)
         logging.debug(f"sawtooth center result at mu_pix={mu_pix}, wl={wl}: {snt_result}")
@@ -389,9 +387,16 @@ def crosscorr_roop(fits_path, h5py_path, window_size=31):
         data = hdul[0].data
 
     y_indices = list(range(10, 500))
-    pix_vals = np.empty((len(y_indices), 8 * window_size), dtype=np.float32)
-    pixpos = np.empty((8, len(y_indices)), dtype=np.float32)
-    converged = np.empty((8, len(y_indices)), dtype=bool)
+
+    # カーネルから「線の本数 N」を決め打ちせずに取る
+    _ensure_kernel_cache_loaded()
+    any_key = next(iter(KERNEL_CACHE))
+    _, sample_pix_wavelength_pairs = KERNEL_CACHE[any_key]
+    n_lines = sample_pix_wavelength_pairs.shape[0]
+
+    pix_vals = np.empty((len(y_indices), n_lines * window_size), dtype=np.float32)
+    pixpos = np.empty((n_lines, len(y_indices)), dtype=np.float32)
+    converged = np.empty((n_lines, len(y_indices)), dtype=bool)
     lambdas = None  # ループ内で毎回更新されるが、最終的に最後の値を保存する点は従来実装と同じ
 
     for j, raw_idx in enumerate(y_indices):
@@ -400,10 +405,10 @@ def crosscorr_roop(fits_path, h5py_path, window_size=31):
         center_row = data[raw_idx, :]
 
         # raw_idx に対応するカーネルをメモリキャッシュから取得
-        kernel, mu_wavelength_pairs = get_kernel_for_raw_idx(raw_idx)
+        kernel, pix_wavelength_pairs = get_kernel_for_raw_idx(raw_idx)
 
         corr, best_lag, max_corr = get_cross_corr(center_row, kernel)
-        snt_result, lambdas = get_sawtooth_center(center_row, mu_wavelength_pairs, best_lag)
+        snt_result, lambdas = get_sawtooth_center(center_row, pix_wavelength_pairs, best_lag)
 
         xcs = np.array([r.xc for r in snt_result])  # 8 個（0始まりの float とみなす）
         xcs_int = np.rint(xcs).astype(int)
