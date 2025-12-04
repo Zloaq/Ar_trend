@@ -390,13 +390,15 @@ def do_average_noise(date_label: str):
 
     
 def load_noise(date_label: str, exptime: int):
-    noise_path = Path(RAWDATA_DIR) / "noise" / date_label / f"dark{date_label}_{exptime:02d}.fits"
+    noise_path = Path(RAWDATA_DIR) / "noise" / date_label / f"noise{date_label}_{exptime:02d}.fits"
     if not noise_path.exists():
         logging.warning(f"Noise file does not exist: {noise_path}")
         return None
     with fits.open(noise_path, memmap=False) as hdul:
+        header = hdul[0].header
         data = hdul[0].data.astype(np.float64)
-    return data
+        
+    return header, data
 
 
 def do_remove_raw_fits(date_label: str, object_name: str):
@@ -690,15 +692,20 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
             except:
                 exptime = 0
                 
-            dark_data = load_noise(date_label, exptime)
+            noise_header, noise_data = load_noise(date_label, exptime)
+            
+            try:
+                noise_obname = noise_header["OBJECT"]
+            except:
+                noise_obname = "noise"
             
             stack = np.stack(data_list, axis=0)
-            if dark_data is not None:
-                combined = np.mean(stack - dark_data, axis=0)
-                header_ref["DARKFILE"] = (f"dark{date_label}_{exptime:02d}.fits", "dark frame")
+            if noise_data is not None:
+                combined = np.mean(stack - noise_data, axis=0)
+                header_ref["NOISE"] = (f"noise{date_label}_{exptime:02d}.fits", f"noise frame {noise_obname}")
             else:
                 combined = np.mean(stack, axis=0)
-                header_ref["DARKFILE"] = ("", "dark frame")
+                header_ref["NOISE"] = ("", "noise frame")
 
 
             # ヘッダーに IMCMBnnn と NCOMBINE を追加
