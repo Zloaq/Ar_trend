@@ -13,9 +13,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 from typing import Dict, List, Set, Tuple
 from collections import defaultdict
+import warnings
 
 import numpy as np
 from astropy.io import fits
+from astropy.utils.exceptions import AstropyWarning
 import h5py
 
 import sawtooth_newton as snt
@@ -302,10 +304,16 @@ def do_average_dark(date_label: str):
     groups = defaultdict(list)  # key: exptime (float), value: list[Path]
     for fits_path in dark_list:
         try:
-            with fits.open(fits_path, memmap=False) as hdul:
-                hdr = hdul[0].header
-                exptime = hdr.get("EXP_TIME", None)
+            with warnings.catch_warnings():
+                # Astropy の warning を例外に格上げして、壊れていそうな FITS を弾く
+                warnings.simplefilter("error", AstropyWarning)
+                with fits.open(fits_path, memmap=False) as hdul:
+                    hdr = hdul[0].header
+                    exptime = hdr.get("EXP_TIME", None)
             exptime_val = float(exptime)
+        except AstropyWarning as e:
+            logging.warning(f"AstropyWarning while reading header from {fits_path}: {e}. skipping.")
+            continue
         except (TypeError, ValueError):
             logging.warning(f"failed to read EXP_TIME from {fits_path}. skipping.")
             continue
@@ -327,12 +335,17 @@ def do_average_dark(date_label: str):
 
         for idx, fits_path in enumerate(sorted(files), start=1):
             try:
-                with fits.open(fits_path, memmap=False) as hdul:
-                    if header_ref is None:
-                        header_ref = hdul[0].header.copy()
-                    data = hdul[0].data.astype(np.float64)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("error", AstropyWarning)
+                    with fits.open(fits_path, memmap=False) as hdul:
+                        if header_ref is None:
+                            header_ref = hdul[0].header.copy()
+                        data = hdul[0].data.astype(np.float64)
                 data_list.append(data)
                 imcmb_values.append(fits_path.name.rsplit(".fits", 1)[0])
+            except AstropyWarning as e:
+                logging.warning(f"AstropyWarning while reading data from {fits_path}: {e}. skipping.")
+                continue
             except OSError as e:
                 logging.warning(f"failed to read data from {fits_path}: {e}. skipping.")
                 continue
