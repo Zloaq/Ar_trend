@@ -205,28 +205,63 @@ def db_search(conn: sqlite3.Connection, object_name, date_label=None) -> Dict[st
     return filepath_dict
 
 
+def group_consecutive_from_basenames(base_name_list: List[str]) -> List[Tuple[int, int]]:
+    """
+    base_name_list から spec??????-NNNN.fits の NNNN を拾って、
+    連番のかたまりごとに (start, end) を返す。
+
+    例:
+      ["spec240101-0001.fits", "spec240101-0002.fits",
+       "spec240101-0005.fits", "spec240101-0006.fits"]
+    -> [(1, 2), (5, 6)]
+    """
+    nums = []
+
+    for bn in base_name_list:
+        m = re.match(r"spec(\d+)-(\d{4})\.fits$", bn)
+        if not m:
+            continue
+        num = int(m.group(2))
+        nums.append(num)
+
+    if not nums:
+        return []
+
+    nums = sorted(set(nums))
+
+    ranges: List[Tuple[int, int]] = []
+    start = prev = nums[0]
+
+    for n in nums[1:]:
+        if n == prev + 1:
+            # 連番継続
+            prev = n
+        else:
+            # ここまでの固まりを確定
+            ranges.append((start, prev))
+            start = prev = n
+
+    # 最後の固まりを追加
+    ranges.append((start, prev))
+
+    return ranges
+
+
 def do_scp_raw_fits(date_label: str, object_name: str, base_name_list: List[str]) -> None:
     # Extract Num1 from basenames
-    num1_set = set()
-    for bn in base_name_list:
-        m = re.match(r"spec\d{6}-(\d{4})\.fits", bn)
-        if m:
-            num1_set.add(m.group(1))
-
-    # If nothing matched, do nothing
-    if not num1_set:
-        logging.warning(f"No valid Num1 found in base_name_list for {date_label}")
-        return
-
-    num1_list = sorted(num1_set)
-    num_min = int(num1_list[0])
-    num_max = int(num1_list[-1])
 
     dst_dir = Path(RAWDATA_DIR) / object_name / date_label
     dst_dir.mkdir(parents=True, exist_ok=True)
 
+    ranges = group_consecutive_from_basenames(base_name_list)
+
+    for num_min, num_max in ranges:
+        src = f"{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{num_min:04d}-{num_max:04d}.fits"
+        dst = f"{dst_dir}/spec{date_label}-{num_min:04d}-{num_max:04d}.fits"
+        logging.info(f"scp_raw_fits: scp {src} {dst}")
+
     # シェルスクリプトを即席で作って、bash で実行する   
-    script_content = f"""#!/bin/bash
+        script_content = f"""#!/bin/bash
 set -euo pipefail
 src="{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{{{num_min:04d}..{num_max:04d}}}.fits"
 dst="{dst_dir}"
@@ -235,10 +270,10 @@ echo "scp $src $dst"
 scp {RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{{{num_min:04d}..{num_max:04d}}}.fits "$dst"
 """
 
-    with tempfile.NamedTemporaryFile("w", delete=False, suffix=".sh") as tmp:
-        script_path = tmp.name
-        tmp.write(script_content)
-    result = subprocess.run(["bash", script_path], capture_output=True, text=True)
+        with tempfile.NamedTemporaryFile("w", delete=False, suffix=".sh") as tmp:
+            script_path = tmp.name
+            tmp.write(script_content)
+        result = subprocess.run(["bash", script_path], capture_output=True, text=True)
 
     logging.info(f"scp_raw_fits: scp command end")
 
@@ -248,21 +283,7 @@ def do_scp_noise_fits(date_label: str, base_name_list: List[str]) -> None:
     if not base_name_list:
         logging.warning(f"No valid base_name_list for {date_label}")
         return
-    num1_set = set()
-    for bn in base_name_list:
-        m = re.match(r"spec\d{6}-(\d{4})\.fits", bn)
-        if m:
-            num1_set.add(m.group(1))
-
-    # If nothing matched, do nothing
-    if not num1_set:
-        logging.warning(f"No valid Num1 found in base_name_list for {date_label}")
-        return
-
-    num1_list = sorted(num1_set)
-    num_min = int(num1_list[0])
-    num_max = int(num1_list[-1])
-
+    
     dst_dir = Path(RAWDATA_DIR) / "noise" / date_label
 
     # 既に noise 用の raw FITS があれば scp はスキップ
@@ -274,8 +295,15 @@ def do_scp_noise_fits(date_label: str, base_name_list: List[str]) -> None:
 
     dst_dir.mkdir(parents=True, exist_ok=True)
 
+    ranges = group_consecutive_from_basenames(base_name_list)
+
+    for num_min, num_max in ranges:
+        src = f"{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{num_min:04d}-{num_max:04d}.fits"
+        dst = f"{dst_dir}/spec{date_label}-{num_min:04d}-{num_max:04d}.fits"
+        logging.info(f"scp_noise_fits: scp {src} {dst}")
+
     # シェルスクリプトを即席で作って、bash で実行する   
-    script_content = f"""#!/bin/bash
+        script_content = f"""#!/bin/bash
 set -euo pipefail
 src="{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{{{num_min:04d}..{num_max:04d}}}.fits"
 dst="{dst_dir}"
@@ -284,10 +312,10 @@ echo "scp $src $dst"
 scp {RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{{{num_min:04d}..{num_max:04d}}}.fits "$dst"
 """
 
-    with tempfile.NamedTemporaryFile("w", delete=False, suffix=".sh") as tmp:
-        script_path = tmp.name
-        tmp.write(script_content)
-    result = subprocess.run(["bash", script_path], capture_output=True, text=True)
+        with tempfile.NamedTemporaryFile("w", delete=False, suffix=".sh") as tmp:
+            script_path = tmp.name
+            tmp.write(script_content)
+        result = subprocess.run(["bash", script_path], capture_output=True, text=True)
 
     logging.info(f"scp_noise_fits: scp command end")
 
@@ -441,8 +469,8 @@ def chose_row_cut_ar_fits(fits_path, raw_idx):
 
 def get_cross_corr(ar_data, kernel):
     # 平均を引いて正規化
-    ar_data = (ar_data - np.mean(ar_data)) / np.std(ar_data)
-    kernel = (kernel - np.mean(kernel)) / np.std(kernel)
+    #ar_data = (ar_data - np.mean(ar_data)) / np.std(ar_data)
+    #kernel = (kernel - np.mean(kernel)) / np.std(kernel)
 
     # 相互相関を計算（full モードで全シフトを考慮）
     corr = np.correlate(ar_data, kernel, mode='valid')
