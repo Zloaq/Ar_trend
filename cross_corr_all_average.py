@@ -529,7 +529,7 @@ def write_h5py(h5py_path, header, lambdas, pixpos, converged, pix_vals):
     object_name = header.get("OBJECT", "")
     mjd = header.get("MJD", "")
     noise_file = header.get("BKG_FILE", "")
-    noise_type = header.comments.get("BKG_TYPE", "")
+    noise_type = header.get("BKG_TYPE", "")
     offra = header.get("OFFSETRA", "")
     offde = header.get("OFFSETDE", "")
     offro = header.get("OFFSETRO", "")
