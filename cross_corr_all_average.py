@@ -263,7 +263,7 @@ def do_scp_raw_fits(date_label: str, object_name: str, base_name_list: List[str]
     # シェルスクリプトを即席で作って、bash で実行する   
         script_content = f"""#!/bin/bash
 set -euo pipefail
-src="{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{{{num_min:04d}..{num_max:04d}}}.fits"
+src="{RAID_PC}:{src}"
 dst="{dst_dir}"
 mkdir -p "$dst"
 echo "scp $src $dst"
@@ -305,7 +305,7 @@ def do_scp_noise_fits(date_label: str, base_name_list: List[str]) -> None:
     # シェルスクリプトを即席で作って、bash で実行する   
         script_content = f"""#!/bin/bash
 set -euo pipefail
-src="{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{{{num_min:04d}..{num_max:04d}}}.fits"
+src="{RAID_PC}:{src}"
 dst="{dst_dir}"
 mkdir -p "$dst"
 echo "scp $src $dst"
@@ -749,10 +749,6 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
                 noise_data = None
                 noise_obname = "noise"
             
-            try:
-                noise_obname = noise_header["OBJECT"]
-            except:
-                noise_obname = "noise"
             
             stack = np.stack(data_list, axis=0)
             if noise_data is not None:
