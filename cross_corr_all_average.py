@@ -528,8 +528,8 @@ def write_h5py(h5py_path, header, lambdas, pixpos, converged, pix_vals):
 
     object_name = header.get("OBJECT", "")
     mjd = header.get("MJD", "")
-    noise_file = header.get("NOISE", "")
-    noise_cmt = header.comments.get("NOISE", "")
+    noise_file = header.get("BKG_FILE", "")
+    noise_type = header.comments.get("BKG_TYPE", "")
     offra = header.get("OFFSETRA", "")
     offde = header.get("OFFSETDE", "")
     offro = header.get("OFFSETRO", "")
@@ -537,7 +537,7 @@ def write_h5py(h5py_path, header, lambdas, pixpos, converged, pix_vals):
     alt   = header.get("ALTITUDE", "")
     rot   = header.get("ROTATOR", "")
 
-    logger.debug(
+    logger.info(
         "write_h5py: header summary "
         f"object={object_name}, mjd={mjd}, noise_file={noise_file}, "
         f"offra={offra}, offde={offde}, offro={offro}, azi={azi}, alt={alt}, rot={rot}"
@@ -564,7 +564,7 @@ def write_h5py(h5py_path, header, lambdas, pixpos, converged, pix_vals):
             header_grp.attrs["object_name"] = object_name
             header_grp.attrs["mjd"] = mjd
             header_grp.attrs["noise_file"] = noise_file
-            header_grp.attrs["noise_cmt"] = noise_cmt
+            header_grp.attrs["noise_cmt"] = noise_type
             header_grp.attrs["offra"] = offra
             header_grp.attrs["offde"] = offde
             header_grp.attrs["offro"] = offro
@@ -795,10 +795,12 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
             stack = np.stack(data_list, axis=0)
             if noise_data is not None:
                 combined = np.mean(stack - noise_data, axis=0)
-                header_ref["NOISE"] = (f"noise{date_label}_{exptime:02d}.fits", f"noise frame {noise_obname}")
+                header_ref["BKG_FILE"] = f"noise{date_label}_{exptime:02d}.fits"
+                header_ref["BKG_TYPE"] = noise_obname
             else:
                 combined = np.mean(stack, axis=0)
-                header_ref["NOISE"] = ("", "noise frame")
+                header_ref["BKG_FILE"] = ""
+                header_ref["BKG_TYPE"] = ""
 
 
             # ヘッダーに IMCMBnnn と NCOMBINE を追加
