@@ -586,11 +586,22 @@ def write_h5py(h5py_path, header, lambdas, pixpos, converged, pix_vals):
 
 
 def crosscorr_roop(fits_path, h5py_path, window_size=31):
+    logger = logging.getLogger(__name__)
+    logger.info(f"crosscorr_roop: start fits_path={fits_path}, window_size={window_size}")
 
     # ヘッダと画像データを一度だけメモリ上に展開する
-    header = fits.getheader(fits_path)
-    with fits.open(fits_path, memmap=False) as hdul:
-        data = hdul[0].data
+    try:
+        header = fits.getheader(fits_path)
+    except Exception as e:
+        logger.error(f"crosscorr_roop: failed to read header from {fits_path}: {e}")
+        return
+
+    try:
+        with fits.open(fits_path, memmap=False) as hdul:
+            data = hdul[0].data
+    except Exception as e:
+        logger.error(f"crosscorr_roop: failed to read data from {fits_path}: {e}")
+        return
 
     y_indices = list(range(10, 500))
 
@@ -600,13 +611,17 @@ def crosscorr_roop(fits_path, h5py_path, window_size=31):
     _, sample_pix_wavelength_pairs = KERNEL_CACHE[any_key]
     n_lines = sample_pix_wavelength_pairs.shape[0]
 
+    logger.debug(
+        f"crosscorr_roop: ny={len(y_indices)}, n_lines={n_lines}, "
+        f"kernel_keys={list(KERNEL_CACHE.keys())}"
+    )
+
     pix_vals = np.empty((len(y_indices), n_lines * window_size), dtype=np.float32)
     pixpos = np.empty((n_lines, len(y_indices)), dtype=np.float32)
     converged = np.empty((n_lines, len(y_indices)), dtype=bool)
     lambdas = None  # ループ内で毎回更新されるが、最終的に最後の値を保存する点は従来実装と同じ
 
     for j, raw_idx in enumerate(y_indices):
-        #logging.info(f"processing raw_idx={raw_idx} in {fits_path}")
         # data から直接必要な行を取り出す（FITS を毎回開き直さない）
         center_row = data[raw_idx, :]
 
@@ -615,6 +630,15 @@ def crosscorr_roop(fits_path, h5py_path, window_size=31):
 
         corr, best_lag, max_corr = get_cross_corr(center_row, kernel)
         snt_result, lambdas = get_sawtooth_center(center_row, pix_wavelength_pairs, best_lag)
+
+        # 収束本数などの軽い情報をときどきログに出す（多すぎないように間引く）
+        if j == 0 or (j + 1) % 50 == 0 or j == len(y_indices) - 1:
+            num_conv = sum(r.converged for r in snt_result)
+            logger.info(
+                f"crosscorr_roop: fits={Path(fits_path).name} raw_idx={raw_idx} "
+                f"best_lag={best_lag} max_corr={max_corr:.3g} "
+                f"converged={num_conv}/{n_lines}"
+            )
 
         xcs = np.array([r.xc for r in snt_result])  # 8 個（0始まりの float とみなす）
         xcs_int = np.rint(xcs).astype(int)
@@ -636,7 +660,10 @@ def crosscorr_roop(fits_path, h5py_path, window_size=31):
 
         # C案: 8本分を1次元に連結して N_y x (8*window_size)
         pix_vals[j, :] = win_segments.ravel()
+
+    logger.info(f"crosscorr_roop: writing h5 file {h5py_path}")
     write_h5py(h5py_path, header, lambdas, pixpos, converged, pix_vals)
+    logger.info(f"crosscorr_roop: finished fits_path={fits_path}, h5={h5py_path}")
 
 
 
