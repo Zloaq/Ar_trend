@@ -518,16 +518,30 @@ def get_sawtooth_center(center_row, pix_wavelength_pairs, best_lag):
 
 
 def write_h5py(h5py_path, header, lambdas, pixpos, converged, pix_vals):
+    logger = logging.getLogger(__name__)
+    logger.info(
+        f"write_h5py: start path={h5py_path} "
+        f"pixpos_shape={getattr(pixpos, 'shape', None)} "
+        f"converged_shape={getattr(converged, 'shape', None)} "
+        f"pix_vals_shape={getattr(pix_vals, 'shape', None)}"
+    )
+
     object_name = header.get("OBJECT", "")
     mjd = header.get("MJD", "")
     noise_file = header.get("NOISE", "")
-    noise_cmt = header.comments.get("NOISE", "") 
+    noise_cmt = header.comments.get("NOISE", "")
     offra = header.get("OFFSETRA", "")
     offde = header.get("OFFSETDE", "")
     offro = header.get("OFFSETRO", "")
     azi   = header.get("AZIMUTH", "")
     alt   = header.get("ALTITUDE", "")
     rot   = header.get("ROTATOR", "")
+
+    logger.debug(
+        "write_h5py: header summary "
+        f"object={object_name}, mjd={mjd}, noise_file={noise_file}, "
+        f"offra={offra}, offde={offde}, offro={offro}, azi={azi}, alt={alt}, rot={rot}"
+    )
 
     # collect IMCMB*** cards and NCOMBINE from header
     imcmb_items = []
@@ -542,47 +556,57 @@ def write_h5py(h5py_path, header, lambdas, pixpos, converged, pix_vals):
     imcmb_items.sort(key=lambda kv: kv[0])
     imcmb_values = [v for _, v in imcmb_items]
 
-    with h5py.File(h5py_path, "a") as f:
-        header_grp = f.require_group("header")
+    try:
+        with h5py.File(h5py_path, "a") as f:
+            header_grp = f.require_group("header")
 
-        # store main header values as attributes on /header
-        header_grp.attrs["object_name"] = object_name
-        header_grp.attrs["mjd"] = mjd
-        header_grp.attrs["noise_file"] = noise_file
-        header_grp.attrs["noise_cmt"] = noise_cmt
-        header_grp.attrs["offra"] = offra
-        header_grp.attrs["offde"] = offde
-        header_grp.attrs["offro"] = offro
-        header_grp.attrs["azi"] = azi
-        header_grp.attrs["alt"] = alt
-        header_grp.attrs["rot"] = rot
+            # store main header values as attributes on /header
+            header_grp.attrs["object_name"] = object_name
+            header_grp.attrs["mjd"] = mjd
+            header_grp.attrs["noise_file"] = noise_file
+            header_grp.attrs["noise_cmt"] = noise_cmt
+            header_grp.attrs["offra"] = offra
+            header_grp.attrs["offde"] = offde
+            header_grp.attrs["offro"] = offro
+            header_grp.attrs["azi"] = azi
+            header_grp.attrs["alt"] = alt
+            header_grp.attrs["rot"] = rot
 
-        # IMCMB dataset as a single string (newline-separated), always recreate
-        imcmb_str = "\n".join(str(v) for v in imcmb_values) if imcmb_values else ""
-        if "IMCMB" in header_grp:
-            del header_grp["IMCMB"]
-        dt = h5py.string_dtype(encoding="utf-8")
-        header_grp.create_dataset("IMCMB", data=imcmb_str, dtype=dt)
+            # IMCMB dataset as a single string (newline-separated), always recreate
+            imcmb_str = "\n".join(str(v) for v in imcmb_values) if imcmb_values else ""
+            if "IMCMB" in header_grp:
+                del header_grp["IMCMB"]
+            dt = h5py.string_dtype(encoding="utf-8")
+            header_grp.create_dataset("IMCMB", data=imcmb_str, dtype=dt)
 
-        # NCOMBINE as an attribute on /header (always present)
-        if ncombine is not None:
-            header_grp.attrs["NCOMBINE"] = int(ncombine)
-        else:
-            header_grp.attrs["NCOMBINE"] = 1
+            # NCOMBINE as an attribute on /header (always present)
+            if ncombine is not None:
+                header_grp.attrs["NCOMBINE"] = int(ncombine)
+            else:
+                header_grp.attrs["NCOMBINE"] = 1
 
-        # keep lambdas as a root attribute
-        f.attrs["lambdas"] = lambdas
+            # keep lambdas as a root attribute
+            f.attrs["lambdas"] = lambdas
 
-        # save 8 x N_y array of xc values
-        if "pixpos" in f:
-            del f["pixpos"]
-        f.create_dataset("pixpos", data=pixpos)
-        if "converged" in f:
-            del f["converged"]
-        f.create_dataset("converged", data=converged)
-        if "pix_vals" in f:
-            del f["pix_vals"]
-        f.create_dataset("pix_vals", data=pix_vals)
+            # save 8 x N_y array of xc values
+            if "pixpos" in f:
+                del f["pixpos"]
+            f.create_dataset("pixpos", data=pixpos)
+            if "converged" in f:
+                del f["converged"]
+            f.create_dataset("converged", data=converged)
+            if "pix_vals" in f:
+                del f["pix_vals"]
+            f.create_dataset("pix_vals", data=pix_vals)
+
+        logger.info(
+            f"write_h5py: finished path={h5py_path} "
+            f"n_imcmb={len(imcmb_values)} ncombine={ncombine} "
+            f"lambdas_len={len(lambdas) if lambdas is not None else 'None'}"
+        )
+    except Exception as e:
+        logger.error(f"write_h5py: failed to write {h5py_path}: {e}")
+        raise
 
 
 def crosscorr_roop(fits_path, h5py_path, window_size=31):
@@ -630,15 +654,6 @@ def crosscorr_roop(fits_path, h5py_path, window_size=31):
 
         corr, best_lag, max_corr = get_cross_corr(center_row, kernel)
         snt_result, lambdas = get_sawtooth_center(center_row, pix_wavelength_pairs, best_lag)
-
-        # 収束本数などの軽い情報をときどきログに出す（多すぎないように間引く）
-        if j == 0 or (j + 1) % 50 == 0 or j == len(y_indices) - 1:
-            num_conv = sum(r.converged for r in snt_result)
-            logger.info(
-                f"crosscorr_roop: fits={Path(fits_path).name} raw_idx={raw_idx} "
-                f"best_lag={best_lag} max_corr={max_corr:.3g} "
-                f"converged={num_conv}/{n_lines}"
-            )
 
         xcs = np.array([r.xc for r in snt_result])  # 8 個（0始まりの float とみなす）
         xcs_int = np.rint(xcs).astype(int)
