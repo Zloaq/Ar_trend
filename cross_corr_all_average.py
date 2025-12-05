@@ -878,7 +878,7 @@ def main():
 
     conn.close()
 
-    with ProcessPoolExecutor(max_workers=5, initializer=worker_init) as ex:
+    with ProcessPoolExecutor(max_workers=10, initializer=worker_init) as ex:
         future_to_job = {
             ex.submit(work_per_date_label, object_name, date_label, base_name_list, dark_base_name_list, aroff_base_name_list): (object_name, date_label)
             for object_name, date_label, base_name_list, dark_base_name_list, aroff_base_name_list in jobs
