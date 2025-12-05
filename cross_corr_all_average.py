@@ -64,6 +64,8 @@ RAWDATA_DIR= os.getenv("RAWDATA_DIR")
 WORK_DIR = os.getenv("WORK_DIR_ave")
 KERNEL_CONFIG_DIR = os.getenv("KERNEL_CONFIG_DIR")
 
+NUM_PROCESS = 10
+
 # Required local files and kernel configurations
 REQUIRED_LOCAL_FILES = {
     "ar_name_csv": Path(__file__).parent / "ar_name.csv",
@@ -708,13 +710,6 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
 
     # 必要な生 FITS をいったんローカルにコピー
     do_scp_raw_fits(date_label, object_name, base_name_list)
-    # dark を全てローカルにコピー
-    if aroff_base_name_list:
-        do_scp_noise_fits(date_label, aroff_base_name_list)
-    else:
-        do_scp_noise_fits(date_label, dark_base_name_list)
-    # dark を積分時間ごとに平均化
-    do_average_noise(date_label)
 
     # ヘッダーのキーでグループ分け
     groups = defaultdict(list)  # key: header tuple, value: list[(base_name, fits_path)]
@@ -866,6 +861,12 @@ def get_object_list(path: Path):
     return objects
 
 
+def make_background_noise(date_label, base_name_list):
+
+    do_scp_noise_fits(date_label, base_name_list)
+    do_average_noise(date_label)
+
+
 
 def main():
     # 必須ファイル・環境のチェック
@@ -913,6 +914,29 @@ def main():
             spec_map[obj][date_label].append(base_name)
 
     jobs = []
+    noise_dates = sorted(set(dark_map.keys()) | set(aroff_map.keys()))
+    for date_label in noise_dates:
+        base_name_list = aroff_map.get(date_label) or dark_map.get(date_label, [])
+        if not base_name_list:
+            continue
+
+        jobs.append((date_label, base_name_list))
+
+    with ProcessPoolExecutor(max_workers=NUM_PROCESS, initializer=worker_init) as ex:
+        future_to_job = {
+            ex.submit(make_background_noise, date_label, base_name_list): (date_label, base_name_list)
+            for date_label, base_name_list in jobs
+        }
+        total = len(future_to_job)
+        done = 0
+        for fut in as_completed(future_to_job):
+            date_label, base_name_list = future_to_job[fut]
+            done += 1
+            sys.stdout.write(f"[{done}/{total}] finished {date_label}\n")
+            sys.stdout.flush()
+    
+
+    jobs = []
     for object_name in objects:
         fits_dict = spec_map.get(object_name, {})
         for date_label, base_name_list in fits_dict.items():
@@ -922,7 +946,7 @@ def main():
 
     conn.close()
 
-    with ProcessPoolExecutor(max_workers=10, initializer=worker_init) as ex:
+    with ProcessPoolExecutor(max_workers=NUM_PROCESS, initializer=worker_init) as ex:
         future_to_job = {
             ex.submit(work_per_date_label, object_name, date_label, base_name_list, dark_base_name_list, aroff_base_name_list): (object_name, date_label)
             for object_name, date_label, base_name_list, dark_base_name_list, aroff_base_name_list in jobs
