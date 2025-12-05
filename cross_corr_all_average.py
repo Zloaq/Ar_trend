@@ -292,7 +292,7 @@ def do_scp_noise_fits(date_label: str, base_name_list: List[str]) -> None:
     if dst_dir.exists():
         existing_spec = list(dst_dir.glob("noise*.fits"))
         if existing_spec:
-            logging.info(f"Noise FITS already exist in {dst_dir}. skip scp.")
+            #logging.info(f"Noise FITS already exist in {dst_dir}. skip scp.")
             return
 
     dst_dir.mkdir(parents=True, exist_ok=True)
@@ -302,7 +302,7 @@ def do_scp_noise_fits(date_label: str, base_name_list: List[str]) -> None:
     for num_min, num_max in ranges:
         src = f"{RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{num_min:04d}-{num_max:04d}.fits"
         dst = f"{dst_dir}/spec{date_label}-{num_min:04d}-{num_max:04d}.fits"
-        logging.info(f"scp_noise_fits: scp {src} {dst}")
+        #logging.info(f"scp_noise_fits: scp {src} {dst}")
 
     # シェルスクリプトを即席で作って、bash で実行する   
         script_content = f"""#!/bin/bash
@@ -319,7 +319,7 @@ scp {RAID_PC}:{RAID_DIR}/{date_label}/spec/spec{date_label}-{{{num_min:04d}..{nu
             tmp.write(script_content)
         result = subprocess.run(["bash", script_path], capture_output=True, text=True)
 
-    logging.info(f"scp_noise_fits: scp command end")
+    #logging.info(f"scp_noise_fits: scp command end")
 
 
 def do_average_noise(date_label: str):
@@ -368,10 +368,10 @@ def do_average_noise(date_label: str):
         # 1つの EXP_TIME につき noise は最大 10 枚まで使う
         files = sorted(files)
         if len(files) > 10:
-            logging.info(
-                f"Noise frames for {date_label} EXP_TIME={exptime_val} are {len(files)}; "
-                f"using first 10 frames for averaging."
-            )
+            # logging.info(
+            #     f"Noise frames for {date_label} EXP_TIME={exptime_val} are {len(files)}; "
+            #     f"using first 10 frames for averaging."
+            # )
             files = files[:10]
 
         data_list = []
@@ -428,9 +428,9 @@ def do_average_noise(date_label: str):
         hdu = fits.PrimaryHDU(data=combined.astype(np.float32), header=header_ref)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         hdu.writeto(out_path, overwrite=True)
-        logging.info(
-            f"created averaged dark {out_path} from {len(imcmb_values)} frames (EXP_TIME={exptime_val})"
-        )
+        # logging.info(
+        #     f"created averaged dark {out_path} from {len(imcmb_values)} frames (EXP_TIME={exptime_val})"
+        # )
 
     
 def load_noise(date_label: str, exptime: int):
@@ -834,7 +834,7 @@ def work_per_date_label(object_name: str, date_label: str, base_name_list: List[
     # 生 FITS は最後にまとめて削除
     logging.info(f"END   job pid={os.getpid()} {object_name} {date_label}")
     do_remove_raw_fits(date_label, object_name)
-    do_remove_raw_fits(date_label, "noise")
+    
 
 
 
@@ -865,6 +865,7 @@ def make_background_noise(date_label, base_name_list):
 
     do_scp_noise_fits(date_label, base_name_list)
     do_average_noise(date_label)
+    do_remove_raw_fits(date_label, "noise")
 
 
 
