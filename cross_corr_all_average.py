@@ -492,7 +492,8 @@ def get_sawtooth_center(center_row, pix_wavelength_pairs, best_lag):
 def write_h5py(h5py_path, header, lambdas, pixpos, converged, pix_vals):
     object_name = header.get("OBJECT", "")
     mjd = header.get("MJD", "")
-    noise = header.get("NOISE", "")
+    noise_file = header.get("NOISE", "")
+    noise_cmt = header.comments.get("NOISE", "") 
     offra = header.get("OFFSETRA", "")
     offde = header.get("OFFSETDE", "")
     offro = header.get("OFFSETRO", "")
@@ -519,7 +520,8 @@ def write_h5py(h5py_path, header, lambdas, pixpos, converged, pix_vals):
         # store main header values as attributes on /header
         header_grp.attrs["object_name"] = object_name
         header_grp.attrs["mjd"] = mjd
-        header_grp.attrs["noise"] = noise
+        header_grp.attrs["noise_file"] = noise_file
+        header_grp.attrs["noise_cmt"] = noise_cmt
         header_grp.attrs["offra"] = offra
         header_grp.attrs["offde"] = offde
         header_grp.attrs["offro"] = offro
