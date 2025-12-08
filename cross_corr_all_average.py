@@ -590,7 +590,7 @@ def write_h5py(h5py_path, header, lambdas, pixpos, converged, pix_vals):
             # keep lambdas as a root attribute
             f.attrs["lambdas"] = lambdas
 
-            # save 8 x N_y array of xc values
+            # save 10 x N_y array of xc values
             if "pixpos" in f:
                 del f["pixpos"]
             f.create_dataset("pixpos", data=pixpos)
@@ -657,7 +657,7 @@ def crosscorr_roop(fits_path, h5py_path, window_size=31):
         corr, best_lag, max_corr = get_cross_corr(center_row, kernel)
         snt_result, lambdas = get_sawtooth_center(center_row, pix_wavelength_pairs, best_lag)
 
-        xcs = np.array([r.xc for r in snt_result])  # 8 個（0始まりの float とみなす）
+        xcs = np.array([r.xc for r in snt_result])  # 10 個（0始まりの float とみなす）
         xcs_int = np.rint(xcs).astype(int)
 
         # 窓の開始インデックス（中心から window_size//2 分ずらす）
@@ -667,15 +667,15 @@ def crosscorr_roop(fits_path, h5py_path, window_size=31):
         # 先頭側(start<0)・けつ側(start+window_size>len(center_row))のはみ出しをまとめてクリップ
         max_start = center_row.size - window_size
         starts = np.clip(starts, 0, max_start)
-        # shape = (8, window_size) のインデックスを作って一気にスライス
+        # shape = (10, window_size) のインデックスを作って一気にスライス
         idx = starts[:, None] + np.arange(window_size)
-        win_segments = center_row[idx]  # (8, window_size)
+        win_segments = center_row[idx]  # (10, window_size)
 
         # 1start で保存（従来どおり）
         pixpos[:, j] = np.array([r.xc + 1 for r in snt_result], dtype=np.float32)
         converged[:, j] = np.array([r.converged for r in snt_result], dtype=bool)
 
-        # C案: 8本分を1次元に連結して N_y x (8*window_size)
+        # C案: 10本分を1次元に連結して N_y x (10*window_size)
         pix_vals[j, :] = win_segments.ravel()
 
     logger.info(f"crosscorr_roop: writing h5 file {h5py_path}")
